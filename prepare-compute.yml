@@ -1,0 +1,9 @@
+---
+
+- hosts: compute
+  tasks:
+
+   - name: "Set compute host name"
+     become: true
+     hostname:
+        name: compute

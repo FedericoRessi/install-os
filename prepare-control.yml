@@ -1,0 +1,9 @@
+---
+
+- hosts: control
+  tasks:
+
+   - name: "Set control host name"
+     become: true
+     hostname:
+        name: control

@@ -1,0 +1,78 @@
+#!/bin/bash
+
+set -eu
+
+
+TARGET_HOST_DIR=${TARGET_HOST_DIR:-$(pwd)/.install-os}
+mkdir -p "${TARGET_HOST_DIR}"
+
+TARGET_HOST_FILE=${TARGET_HOST_FILE:-${TARGET_HOST_DIR}/host}
+TARGET_HOST=${1:-$(cat "${TARGET_HOST_FILE}" || true)}
+if [ "${TARGET_HOST}" == "" ]; then
+	echo "
+		Please specify target host name:
+			$0 <target-host>
+	"
+	exit 1
+fi
+echo "${TARGET_HOST}" > "${TARGET_HOST_FILE}"
+
+TARGET_PORT=${TARGET_PORT:-22}
+TARGET_USER=${TARGET_USER:-root}
+
+
+# Generate SSH config file
+SSH_CONFIG_FILE=${SSH_CONFIG_FILE:-${TARGET_HOST_DIR}/ssh_config}
+echo "
+Host target
+    HostName ${TARGET_HOST} 
+    Port ${TARGET_PORT}
+    User ${TARGET_USER}
+    UserKnownHostsFile /dev/null
+    StrictHostKeyChecking no
+" > "${SSH_CONFIG_FILE}"
+
+
+# Generate ansible config file
+ANSIBLE_CONFIG_FILE=${ANSIBLE_CONFIG_FILE:-${TARGET_HOST_DIR}/ansible.cfg}
+echo "
+[ssh_connection]
+ssh_args = -F '${SSH_CONFIG_FILE}'
+" > "${ANSIBLE_CONFIG_FILE}"
+
+
+# Generate hosts.ini
+ANSIBLE_INVENTORY_FILE=${ANSIBLE_INVENTORY_FILE:-${TARGET_HOST_DIR}/hosts.ini}
+echo "[target]
+${TARGET_HOST}:${TARGET_PORT}
+" > "${ANSIBLE_INVENTORY_FILE}"
+
+
+# Detect SSH key file and creates it if not found
+SSH_KEY_FILES=($(ls ~/.ssh/id_rsa ~/.ssh/id_dsa 2> /dev/null || true) ~/.ssh/id_rsa)
+TARGET_KEY_FILE=${TARGET_KEY_FILE:-${SSH_KEY_FILES[0]}}
+[ -r "${TARGET_KEY_FILE}" ] || ssh-keygen -P "" -f "${TARGET_KEY_FILE}"
+
+
+# Install SSH key file
+export TARGET_PUB_KEY=$(cat "${TARGET_KEY_FILE}.pub")
+ssh -F "${SSH_CONFIG_FILE}" target "
+set -eu
+mkdir -p ~/.ssh
+chown -fR \${USER}.\${USER} ~/.ssh
+chmod 700 ~/.ssh
+if ! grep -q -e '${TARGET_PUB_KEY}' ~/.ssh/authorized_keys; then
+	echo '${TARGET_PUB_KEY}' >> ~/.ssh/authorized_keys
+fi
+chmod 600 ~/.ssh/authorized_keys
+"
+
+# Remove host from remote host just in case
+(
+	grep -v "${TARGET_HOST}" ~/.ssh/known_hosts > ~/.ssh/known_hosts.tmp
+	mv ~/.ssh/known_hosts.tmp ~/.ssh/known_hosts
+) || true
+
+
+# Run ansible playbook
+ansible-playbook "--ssh-extra-args=-F '${SSH_CONFIG_FILE}'" -u "${TARGET_USER}" -i "${ANSIBLE_INVENTORY_FILE}" prepare-host.yml
