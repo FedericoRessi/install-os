@@ -1,0 +1,15 @@
+---
+
+- hosts: all
+  tasks:
+
+   - name: "Configure host name"
+     become: true
+     hostname:
+        name: "{{ inventory_hostname }}"
+
+   - name: "Generate /etc/hosts file"
+     become: true
+     template:
+       src=etc/hosts
+       dest=/etc/hosts
