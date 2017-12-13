@@ -4,7 +4,6 @@
   become: true
   tasks:
 
-
    - name: "Configure host name"
      hostname:
         name: "{{ inventory_hostname }}"
@@ -12,8 +11,8 @@
 
    - name: "Generate /etc/hosts file"
      template:
-       src=etc/hosts
-       dest=/etc/hosts
+       src: etc/hosts.j2
+       dest: /etc/hosts
      tags: dns
 
    - name: "Install NTP service"
@@ -66,3 +65,34 @@
      become: false
      when: reboot_hint.stdout.find("reboot") != -1
      tags: upgrade
+
+   - name: "Install OpenStack client"
+     yum:
+       name: python-openstackclient,openstack-selinux
+       state: installed
+
+
+- hosts: control
+  become: true
+  tasks:
+    
+   - name: "Install MariaDB service"
+     yum:
+       name: mariadb,mariadb-server,python2-PyMySQL 
+       state: installed
+
+   - name: "Get management interface IP"
+     shell: >
+       ifconfig eth1 | awk '/\sinet\s/{print $2}'
+     register: get_management_ip
+
+   - name: "Enable access to database via the management network"
+     template:
+       src: etc/my.cnf.d/openstack.cnf.j2
+       dest: /etc/my.cnf.d/openstack.cnf
+ 
+   - name: "Start and enable the MariaDB service"
+     systemd:
+       name: mariadb
+       enabled: yes
+       state: started
