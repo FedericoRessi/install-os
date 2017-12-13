@@ -1,15 +1,59 @@
 ---
 
 - hosts: all
+  become: true
   tasks:
 
    - name: "Configure host name"
-     become: true
      hostname:
         name: "{{ inventory_hostname }}"
+     tags: dns
 
    - name: "Generate /etc/hosts file"
-     become: true
      template:
        src=etc/hosts
        dest=/etc/hosts
+     tags: dns
+
+   - name: "Install NTP service"
+     yum:
+       name: chrony
+       state: installed
+     tags: ntp
+
+   - name: "Make sure NTP is started up"
+     systemd:
+       name: chronyd
+       enabled: yes
+       state: restarted
+     tags: ntp
+
+   - name: "Enable the OpenStack repository"
+     yum:
+       name: centos-release-openstack-ocata
+       state: installed
+     tags: upgrade
+
+   - name: "Upgrade all packages"
+     yum: name=* state=latest
+     tags: upgrade
+
+   - name: "Check for reboot hint"
+     shell: LAST_KERNEL=$(rpm -q --last kernel | awk 'NR==1{sub(/kernel-/,""); print $1}'); CURRENT_KERNEL=$(uname -r); if [ $LAST_KERNEL != $CURRENT_KERNEL ]; then echo 'reboot'; else echo 'no'; fi
+     ignore_errors: true
+     register: reboot_hint
+     tags: upgrade
+
+   - name: "Rebooting ..."
+     command: shutdown -r now "Reboot required for updated kernel"
+     async: 0
+     poll: 0
+     ignore_errors: true
+     when: reboot_hint.stdout.find("reboot") != -1
+     register: rebooting
+     tags: upgrade
+
+   - name: "Wait for thing to reboot..."
+     pause: seconds=60
+     when: rebooting|changed
+     tags: upgrade
