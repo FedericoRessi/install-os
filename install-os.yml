@@ -100,3 +100,38 @@
     - name: "Enter root password for MariaDB service"
       shell: |
         echo -e "\nn\nY\nY\nY\nY" | mysql_secure_installation
+
+    - name: "Install RabbitMQ service"
+      yum:
+        name: rabbitmq-server
+        state: installed
+
+    - name: "Start and enable RabbitMQ service"
+      systemd:
+        name: rabbitmq-server
+        enabled: yes
+        state: started
+
+    - name: "Add openstack user to RabbitMQ service"
+      shell: |
+        rabbitmqctl add_user openstack 1234
+        rabbitmqctl set_permissions openstack ".*" ".*" ".*"
+ 
+    - name: "Install Memcached service"
+      yum:
+        name: memcached,python-memcached
+        state: installed
+
+    - name: "Configure Memcached service to use the management IP address"
+      lineinfile: 
+        path: "/etc/sysconfig/memcached"
+        regexp: '^OPTIONS='
+        line: >
+          OPTIONS="-l 127.0.0.1,::1,controller"
+     
+    - name: "Start and enable RabbitMQ service"
+      systemd:
+        name: memcached
+        enabled: yes
+        state: restarted
+ 
