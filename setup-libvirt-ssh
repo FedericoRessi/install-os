@@ -75,4 +75,4 @@ chmod 600 ~/.ssh/authorized_keys
 
 
 # Run ansible playbook
-ansible-playbook "--ssh-extra-args=-F '${SSH_CONFIG_FILE}'" -u "${TARGET_USER}" -i "${ANSIBLE_INVENTORY_FILE}" prepare-host.yml
+ansible-playbook "--ssh-extra-args=-F '${SSH_CONFIG_FILE}'" -u "${TARGET_USER}" -i "${ANSIBLE_INVENTORY_FILE}" setup-libvirt-ssh.yml
