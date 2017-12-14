@@ -4,7 +4,7 @@ Vagrant.configure("2") do |config|
   
   config.vm.provider "libvirt" do |vm|
     if File.file?('.install-os/host')
-      libvirt.host = File.read('.install-os/host').gsub(/\s+/, "")
+      vm.host = File.read('.install-os/host').gsub(/\s+/, "")
     end
     vm.username = "stack"
     vm.connect_via_ssh = true
@@ -26,8 +26,8 @@ Vagrant.configure("2") do |config|
     control.vm.network "private_network", ip: "192.168.10.100"
     # provider network
 	  control.vm.network "private_network", ip: "192.168.11.100"
-	  control.vm.provider "libvirt" do |libvirt|
-	    libvirt.memory = 8192
+	  control.vm.provider "libvirt" do |vm|
+	    vm.memory = 8192
 	  end
     config.vm.provider "virtualbox" do |vbox|
       vbox.memory = 8192
