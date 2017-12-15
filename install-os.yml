@@ -156,20 +156,12 @@
         name: openstack-keystone,httpd,mod_wsgi
         state: installed
 
-    - name: Create keystone log directory
-      file:
-        path: /var/log/keystone/
-        owner: keystone
-        group: keystone
-        state: directory
-        recurse: yes
-
     - name: Configure Keystone database access
       ini_file:
         path: /etc/keystone/keystone.conf
         section: database
         option: connection
-        value: 'mysql+pymysql://keystone:12345@controller/keystone'
+        value: 'mysql+pymysql://keystone:12345@control/keystone'
 
     - name: Configure the Fernet token provider
       ini_file:
@@ -179,7 +171,7 @@
         value: fernet
 
     - name: Populate the Identity service database
-      become: keystone
+      become_user: keystone
       shell: >
         keystone-manage db_sync
 
@@ -192,8 +184,8 @@
 
     - name: Bootstrap the Identity service
       shell: >
-        keystone-manage bootstrap --bootstrap-password ADMIN_PASS
-          --bootstrap-admin-url http://controller:35357/v3/
-          --bootstrap-internal-url http://controller:5000/v3/
-          --bootstrap-public-url http://controller:5000/v3/
+        keystone-manage bootstrap --bootstrap-password 12345 \
+          --bootstrap-admin-url http://control:35357/v3/ \
+          --bootstrap-internal-url http://control:5000/v3/ \
+          --bootstrap-public-url http://control:5000/v3/ \
           --bootstrap-region-id RegionOne
