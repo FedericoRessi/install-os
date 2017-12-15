@@ -71,6 +71,33 @@
         name: python-openstackclient,openstack-selinux
         state: installed
 
+    - name: check to see if pip is already installed
+      command: "pip --version"
+      ignore_errors: true
+      register: pip_is_installed
+      changed_when: false
+
+    - block:
+        - name: download get-pip.py
+          get_url:
+            url: https://bootstrap.pypa.io/get-pip.py
+            dest: /tmp
+
+        - name: install pip
+          command: "python /tmp/get-pip.py"
+
+        - name: delete get-pip.py
+          file:
+            path: /tmp/get-pip.py
+            state: absent
+
+      when: pip_is_installed.rc != 0
+
+    - name: Install pexpect
+      pip:
+        name: pexpect
+        version: 4
+
 
 - hosts: control
   become: true
@@ -223,16 +250,6 @@
         state: directory
         mode: 0700
 
-    - name: Provide admin-openrc script
-      template:
-        src: openrc/admin-openrc.j2
-        dest: /root/.openrc/admin-openrc
-
-    - name: Provide demo-openrc script
-      template:
-        src: openrc/demo-openrc.j2
-        dest: /root/.openrc/demo-openrc
-
     - name: Create defautl projects
       shell: |
         openstack project show {{ item | lower }} || \
@@ -254,3 +271,60 @@
     - name: Add the user role to the demo user of the demo project
       shell: >
         openstack role add --project demo --user demo user
+
+    - name: disable the temporary authentication token mechanism
+      ini_file:
+        path: /etc/keystone/keystone-paste.ini
+        section: "{{ item }}"
+        option: admin_token_auth
+        state: absent
+      with_items:
+        - pipeline:public_api
+        - pipeline:admin_api
+        - pipeline:api_v3
+
+    - name: Check admin user authentication
+      environment:
+        OS_AUTH_URL: ""
+        OS_PASSWORD: ""
+      expect:
+        command: >
+          openstack
+            --os-auth-url http://control:35357/v3
+            --os-project-domain-name default
+            --os-user-domain-name default
+            --os-project-name admin
+            --os-username admin token issue
+        responses:
+          Password: 12345
+
+    - name: Check demo user authentication
+      environment:
+        OS_AUTH_URL: ""
+        OS_PASSWORD: ""
+      expect:
+        command: >
+          openstack
+            --os-auth-url http://control:5000/v3
+            --os-project-domain-name default
+            --os-user-domain-name default
+            --os-project-name demo
+            --os-username demo token issue
+        responses:
+          Password: demo
+
+    - name: Provide openrc scripts
+      template:
+        src: 'openrc/{{ item }}.j2'
+        dest: '/root/.openrc/{{ item }}'
+      with_items:
+        - admin-openrc
+        - demo-openrc
+
+    - name: Test openrc scripts
+      shell: |
+        source /root/.openrc/{{ item }}
+        openstack token issue
+      with_items:
+        - admin-openrc
+        - demo-openrc
