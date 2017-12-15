@@ -4,41 +4,41 @@
   become: true
   tasks:
 
-    - name: "Configure host name"
+    - name: Configure host name
       hostname:
         name: "{{ inventory_hostname }}"
       tags: dns
 
-    - name: "Generate /etc/hosts file"
+    - name: Generate /etc/hosts file
       template:
         src: etc/hosts.j2
         dest: /etc/hosts
       tags: dns
 
-    - name: "Install NTP service"
+    - name: Install NTP service
       yum:
         name: chrony
         state: installed
       tags: ntp
 
-    - name: "Make sure NTP is started up"
+    - name: Make sure NTP is started up
       systemd:
         name: chronyd
         enabled: yes
         state: restarted
       tags: ntp
 
-    - name: "Enable the OpenStack repository"
+    - name: Enable the OpenStack repository
       yum:
         name: centos-release-openstack-ocata
         state: installed
       tags: upgrade
 
-    - name: "Upgrade all packages"
+    - name: Upgrade all packages
       yum: name=* state=latest
       tags: upgrade
 
-    - name: "Check for reboot hint"
+    - name: Check for reboot hint
       shell: |
         LAST_KERNEL=$(rpm -q --last kernel | awk 'NR==1{sub(/kernel-/,""); print $1}')
         CURRENT_KERNEL=$(uname -r); if [ $LAST_KERNEL != $CURRENT_KERNEL ]; then
@@ -50,7 +50,7 @@
       register: reboot_hint
       tags: upgrade
 
-    - name: "Reboot {{ inventory_hostname }} node"
+    - name: Reboot {{ inventory_hostname }} node
       shell: >
         sleep 2 &&
         shutdown -r +1 "Reboot required to update kernel."
@@ -60,13 +60,13 @@
       when: reboot_hint.stdout.find("reboot") != -1
       tags: upgrade
 
-    - name: "Waiting for {{ inventory_hostname }} node to come back..."
+    - name: Waiting for {{ inventory_hostname }} node to come back...
       local_action: wait_for host={{ inventory_hostname }} state=started delay=10 timeout=300
       become: false
       when: reboot_hint.stdout.find("reboot") != -1
       tags: upgrade
 
-    - name: "Install OpenStack client"
+    - name: Install OpenStack client
       yum:
         name: python-openstackclient,openstack-selinux
         state: installed
@@ -75,63 +75,125 @@
 - hosts: control
   become: true
   tasks:
-    
-    - name: "Install MariaDB service"
+
+    - name: Install MariaDB service
       yum:
         name: mariadb,mariadb-server,python2-PyMySQL,MySQL-python 
         state: installed
 
-    - name: "Get management interface IP"
+    - name: Get management interface IP
       shell: >
         ifconfig eth1 | awk '/\sinet\s/{print $2}'
       register: get_management_ip
 
-    - name: "Enable access to database via the management network"
+    - name: Enable access to database via the management network
       template:
         src: etc/my.cnf.d/openstack.cnf.j2
         dest: /etc/my.cnf.d/openstack.cnf
 
-    - name: "Start and enable the MariaDB service"
+    - name: Start and enable the MariaDB service
       systemd:
         name: mariadb
         enabled: yes
         state: restarted
 
-    - name: "Enter root password for MariaDB service"
+    - name: Enter root password for MariaDB service
       shell: |
         echo -e "\nn\nY\nY\nY\nY" | mysql_secure_installation
 
-    - name: "Install RabbitMQ service"
+    - name: Install RabbitMQ service
       yum:
         name: rabbitmq-server
         state: installed
 
-    - name: "Start and enable RabbitMQ service"
+    - name: Start and enable RabbitMQ service
       systemd:
         name: rabbitmq-server
         enabled: yes
         state: started
 
-    - name: "Add openstack user to RabbitMQ service"
+    - name: Add openstack user to RabbitMQ service
       shell: |
         rabbitmqctl add_user openstack 1234
         rabbitmqctl set_permissions openstack ".*" ".*" ".*"
- 
-    - name: "Install Memcached service"
+
+    - name: Install Memcached service
       yum:
         name: memcached,python-memcached
         state: installed
 
-    - name: "Configure Memcached service to use the management IP address"
-      lineinfile: 
+    - name: Configure Memcached service to use the management IP address
+      lineinfile:
         path: "/etc/sysconfig/memcached"
         regexp: '^OPTIONS='
         line: >
           OPTIONS="-l 127.0.0.1,::1,controller"
-     
-    - name: "Start and enable RabbitMQ service"
+
+    - name: Start and enable RabbitMQ service
       systemd:
         name: memcached
         enabled: yes
         state: restarted
- 
+
+    - name: Create database for keystone
+      mysql_db:
+        name: keystone
+        state: present
+
+    - name: Grant proper access to the keystone database
+      mysql_user:
+        name: keystone
+        host: '{{ item }}'
+        password: 12345
+        priv: 'keystone.*:ALL'
+        state: present
+      with_items:
+        - 'localhost'
+        - '%'
+
+    - name: Install keystone components
+      yum:
+        name: openstack-keystone,httpd,mod_wsgi
+        state: installed
+
+    - name: Create keystone log directory
+      file:
+        path: /var/log/keystone/
+        owner: keystone
+        group: keystone
+        state: directory
+        recurse: yes
+
+    - name: Configure Keystone database access
+      ini_file:
+        path: /etc/keystone/keystone.conf
+        section: database
+        option: connection
+        value: 'mysql+pymysql://keystone:12345@controller/keystone'
+
+    - name: Configure the Fernet token provider
+      ini_file:
+        path: /etc/keystone/keystone.conf
+        section: token
+        option: provider
+        value: fernet
+
+    - name: Populate the Identity service database
+      become: keystone
+      shell: >
+        keystone-manage db_sync
+
+    - name: Initialize Fernet key repositories
+      shell: >
+        keystone-manage {{ item }} --keystone-user keystone --keystone-group keystone
+      with_items:
+        - fernet_setup
+        - credential_setup
+
+    - name: Bootstrap the Identity service
+      shell: >
+        keystone-manage bootstrap --bootstrap-password ADMIN_PASS
+          --bootstrap-admin-url http://controller:35357/v3/
+          --bootstrap-internal-url http://controller:5000/v3/
+          --bootstrap-public-url http://controller:5000/v3/
+          --bootstrap-region-id RegionOne

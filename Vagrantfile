@@ -1,7 +1,7 @@
 
 
 Vagrant.configure("2") do |config|
-  
+
   config.vm.provider "libvirt" do |vm|
     if File.file?('.install-os/host')
       vm.host = File.read('.install-os/host').gsub(/\s+/, "")
@@ -13,7 +13,7 @@ Vagrant.configure("2") do |config|
     vm.memory = 4096
     vm.machine_virtual_size = 100
   end
-  
+
   config.vm.provider "virtualbox" do |vm|
     vm.cpus = 1
     vm.memory = 4096
