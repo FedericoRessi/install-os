@@ -189,3 +189,26 @@
           --bootstrap-internal-url http://control:5000/v3/ \
           --bootstrap-public-url http://control:5000/v3/ \
           --bootstrap-region-id RegionOne
+
+    - name: Configure the Apache HTTP server for Keystone
+      lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        regexp: '^ServerName\s'
+        line: ServerName control
+
+    - name: Create a link to the /usr/share/keystone/wsgi-keystone.conf file
+      file:
+        src: /usr/share/keystone/wsgi-keystone.conf
+        dest: /etc/httpd/conf.d/wsgi-keystone.conf
+        state: link
+
+    - name: Start the Apache HTTP service and configure it to start when the system boots
+      systemd:
+        name: httpd
+        enabled: yes
+        state: restarted
+
+    - name: Configure the OpenStack administrative account
+      template:
+        src: etc/profile.d/openstack.sh.j2
+        dest: /etc/profile.d/openstack.sh
