@@ -74,6 +74,15 @@
 
 - hosts: control
   become: true
+  environment:
+    OS_USERNAME: admin
+    OS_PASSWORD: 12345
+    OS_PROJECT_NAME: admin
+    OS_USER_DOMAIN_NAME: Default
+    OS_PROJECT_DOMAIN_NAME: Default
+    OS_AUTH_URL: http://control:35357/v3
+    OS_IDENTITY_API_VERSION: 3
+
   tasks:
 
     - name: Install MariaDB service
@@ -208,7 +217,40 @@
         enabled: yes
         state: restarted
 
-    - name: Configure the OpenStack administrative account
+    - name: Provide admin-openrc script
+      file:
+        path: /root/.openrc
+        state: directory
+        mode: 0700
+
+    - name: Provide admin-openrc script
       template:
-        src: etc/profile.d/openstack.sh.j2
-        dest: /etc/profile.d/openstack.sh
+        src: openrc/admin-openrc.j2
+        dest: /root/.openrc/admin-openrc
+
+    - name: Provide demo-openrc script
+      template:
+        src: openrc/demo-openrc.j2
+        dest: /root/.openrc/demo-openrc
+
+    - name: Create defautl projects
+      shell: |
+        openstack project show {{ item | lower }} || \
+        openstack project create --domain default --description "{{ item }} Project" {{ item | lower }}
+      with_items:
+        - Service
+        - Demo
+
+    - name: Create the demo user
+      shell: |
+        openstack project show demo || \
+        openstack user create --domain default --password demo demo
+
+    - name: Create the user role
+      shell: |
+        openstack role show user || \
+        openstack role create user
+
+    - name: Add the user role to the demo user of the demo project
+      shell: >
+        openstack role add --project demo --user demo user
