@@ -244,12 +244,6 @@
         enabled: yes
         state: restarted
 
-    - name: Provide admin-openrc script
-      file:
-        path: /root/.openrc
-        state: directory
-        mode: 0700
-
     - name: Create defautl projects
       shell: |
         openstack project show {{ item | lower }} || \
@@ -259,13 +253,13 @@
         - Demo
 
     - name: Create the demo user
-      shell: |
-        openstack user show demo || \
+      shell: >
+        openstack user show demo ||
         openstack user create --domain default --password demo demo
 
     - name: Create the user role
-      shell: |
-        openstack role show user || \
+      shell: >
+        openstack role show user ||
         openstack role create user
 
     - name: Add the user role to the demo user of the demo project
@@ -313,6 +307,12 @@
         responses:
           Password: demo
 
+    - name: Provide openrc scripts directory
+      file:
+        path: /root/.openrc
+        state: directory
+        mode: 0700
+
     - name: Provide openrc scripts
       template:
         src: 'openrc/{{ item }}.j2'
@@ -328,3 +328,42 @@
       with_items:
         - admin-openrc
         - demo-openrc
+
+    - name: Create database for Glance
+      mysql_db:
+        name: glance
+        state: present
+
+    - name: Grant proper access to the keystone database
+      mysql_user:
+        name: glance
+        host: '{{ item }}'
+        password: 12345
+        priv: 'glance.*:ALL'
+        state: present
+      with_items:
+        - 'localhost'
+        - '%'
+
+    - name: Create glance user if it doesn't exist
+      shell: >
+        openstack user show glance ||
+        openstack user create --domain default --password 12345 glance
+
+    - name: Add the admin role to the glance user and service project
+      command:
+        openstack role add --project service --user glance admin
+
+    - name: Create the glance service entity
+      command:
+        openstack service create --name glance --description "OpenStack Image" image
+
+    - name: Create the Image service API endpoints
+      shell: >
+        (openstack endpoint list -f value -c Region -c 'Service Name' -c Interface | 
+         grep '^RegionOne glance {{ item }}$') ||
+        openstack endpoint create --region RegionOne image {{ item }} http://control:9292
+      with_items:
+        - public
+        - internal
+        - admin
