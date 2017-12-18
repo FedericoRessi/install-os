@@ -163,7 +163,7 @@
         path: "/etc/sysconfig/memcached"
         regexp: '^OPTIONS='
         line: >
-          OPTIONS="-l 127.0.0.1,::1,controller"
+          OPTIONS="-l 127.0.0.1,::1,control"
 
     - name: Start and enable RabbitMQ service
       systemd:
@@ -367,3 +367,110 @@
         - public
         - internal
         - admin
+
+    - name: Install OpenStack Glance
+      yum:
+        name: openstack-glance
+      register: glance_installed
+
+    - name: Configure Glance database access
+      ini_file:
+        path: '{{ item }}'
+        section: database
+        option: connection
+        value: 'mysql+pymysql://glance:12345@control/glance'
+      with_items:
+       - /etc/glance/glance-api.conf
+       - /etc/glance/glance-registry.conf
+
+    - name: Remove Glance auth token section
+      ini_file:
+        path: '{{ item }}'
+        section: keystone_authtoken
+        state: absent
+      with_items:
+        - /etc/glance/glance-api.conf
+        - /etc/glance/glance-registry.conf
+      when: 'glance_installed.changed'
+
+    - name: Configure Glance auth token section
+      ini_file:
+        path: '{{ item[0] }}'
+        section: keystone_authtoken
+        option: '{{ item[1].option }}'
+        value: '{{ item[1].value }}'
+      with_nested:
+        - [ '/etc/glance/glance-api.conf',
+            '/etc/glance/glance-registry.conf' ]
+        - [ { option: auth_uri, value: 'http://control:5000' },
+            { option: auth_url, value: 'http://control:35357' },
+            { option: memcached_servers, value: 'control:11211' },
+            { option: auth_type, value: password },
+            { option: project_domain_name, value: default },
+            { option: user_domain_name, value: default },
+            { option: project_name, value: service },
+            { option: username, value: glance }]
+
+    - name: Configure Keystone auth password
+      ini_file:
+        path: '{{ item }}'
+        section: keystone_authtoken
+        option: password
+        value: 12345
+      with_items:
+        - /etc/glance/glance-api.conf
+        - /etc/glance/glance-registry.conf
+
+    - name: Configure Glance paste-deploy
+      ini_file:
+        path: '{{ item }}'
+        section: paste_deploy
+        option: flavor
+        value: keystone
+      with_items:
+        - /etc/glance/glance-api.conf
+        - /etc/glance/glance-registry.conf
+
+    - name: Configure the local file system store and location of image files
+      ini_file:
+        path: /etc/glance/glance-api.conf
+        section: glance_store
+        option: '{{ item.option }}'
+        value: '{{ item.value }}'
+      with_items:
+        - { option: stores, value: file,http }
+        - { option: default_store, value: file }
+        - { option: filesystem_store_datadir, value: /var/lib/glance/images/ }
+
+    - name: Populate the Image service database
+      become_user: glance
+      shell: >
+        glance-manage db_sync
+
+    - name: Start the Image services and configure them to start when the system boots
+      systemd:
+        name: openstack-glance-api
+        enabled: yes
+        state: restarted
+
+    - name: Check it has Cirros image
+      shell: |
+        openstack image list -f value -c Name | grep '^cirros$'
+      ignore_errors: true
+      register: has_cirros_image
+
+    - name: Get Cirros image
+      get_url:
+        url: http://download.cirros-cloud.net/0.3.5/cirros-0.3.5-x86_64-disk.img
+        dest: /tmp
+      register: cirros_image
+      when: has_cirros_image.rc != 0
+
+    - name: Upload the image to the Image service
+      command: >
+        openstack image create cirros
+          --file /tmp/cirros-0.3.5-x86_64-disk.img
+          --disk-format qcow2
+          --container-format bare
+          --public
+      when: has_cirros_image.rc != 0
