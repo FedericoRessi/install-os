@@ -120,7 +120,7 @@
     - name: Get management interface IP
       shell: >
         ifconfig eth1 | awk '/\sinet\s/{print $2}'
-      register: get_management_ip
+      register: management_ip
 
     - name: Enable access to database via the management network
       template:
@@ -263,7 +263,7 @@
         openstack role create user
 
     - name: Add the user role to the demo user of the demo project
-      shell: >
+      command:
         openstack role add --project demo --user demo user
 
     - name: disable the temporary authentication token mechanism
@@ -360,8 +360,8 @@
 
     - name: Create the Image service API endpoints
       shell: >
-        (openstack endpoint list -f value -c Region -c 'Service Name' -c Interface | 
-         grep '^RegionOne glance {{ item }}$') ||
+        (openstack endpoint list -f value -c Region -c 'Service Type' -c Interface |
+         grep '^RegionOne image {{ item }}$') ||
         openstack endpoint create --region RegionOne image {{ item }} http://control:9292
       with_items:
         - public
@@ -400,16 +400,16 @@
         option: '{{ item[1].option }}'
         value: '{{ item[1].value }}'
       with_nested:
-        - [ '/etc/glance/glance-api.conf',
-            '/etc/glance/glance-registry.conf' ]
-        - [ { option: auth_uri, value: 'http://control:5000' },
-            { option: auth_url, value: 'http://control:35357' },
-            { option: memcached_servers, value: 'control:11211' },
-            { option: auth_type, value: password },
-            { option: project_domain_name, value: default },
-            { option: user_domain_name, value: default },
-            { option: project_name, value: service },
-            { option: username, value: glance }]
+        - ['/etc/glance/glance-api.conf',
+           '/etc/glance/glance-registry.conf']
+        - [{option: auth_uri, value: 'http://control:5000'},
+           {option: auth_url, value: 'http://control:35357'},
+           {option: memcached_servers, value: 'control:11211'},
+           {option: auth_type, value: password},
+           {option: project_domain_name, value: default},
+           {option: user_domain_name, value: default},
+           {option: project_name, value: service},
+           {option: username, value: glance}]
 
     - name: Configure Keystone auth password
       ini_file:
@@ -438,9 +438,9 @@
         option: '{{ item.option }}'
         value: '{{ item.value }}'
       with_items:
-        - { option: stores, value: file,http }
-        - { option: default_store, value: file }
-        - { option: filesystem_store_datadir, value: /var/lib/glance/images/ }
+        - {option: stores, value: file,http}
+        - {option: default_store, value: file}
+        - {option: filesystem_store_datadir, value: /var/lib/glance/images/}
 
     - name: Populate the Image service database
       become_user: glance
@@ -474,3 +474,161 @@
           --container-format bare
           --public
       when: has_cirros_image.rc != 0
+
+    - name: Create databases for Nova
+      mysql_db:
+        name: nova_api,nova,nova_cell0
+        state: present
+      with_items:
+        - nova_api
+        - nova
+        - nova_cell0
+
+    - name: Grant proper access to the Nova database
+      mysql_user:
+        name: nova
+        host: '{{ item[0] }}'
+        password: 12345
+        priv: '{{ item[1] }}.*:ALL'
+        state: present
+      with_nested:
+        - ['localhost', '%']
+        - ['nova_api', 'nova', 'nova_cell0']
+
+    - name: Create the nova user
+      shell: >
+        openstack user show nova ||
+        openstack user create --domain default --password 12345 nova
+
+    - name: Add the admin role to the nova user of the service project
+      command:
+        openstack role add --project service --user nova admin
+
+    - name: Create the Nova service entity
+      command:
+        openstack service create --name nova --description "OpenStack Compute" compute
+
+    - name: Create the Compute API service endpoints
+      shell: >
+        (openstack endpoint list -f value -c Region -c 'Service Type' -c Interface |
+         grep '^RegionOne compute {{ item }}$') ||
+        openstack endpoint create --region RegionOne compute {{ item }} http://control:8774/v2.1
+      with_items:
+        - public
+        - internal
+        - admin
+
+    - name: Create a placement service user
+      shell: >
+        openstack user show placement ||
+        openstack user create --domain default --password 12345 placement
+
+    - name: Add the admin role to the placement user of the service project
+      command:
+        openstack role add --project service --user placement admin
+
+    - name: Create the Placement API entry in the service catalog
+      command:
+        openstack service create --name placement --description "Placement API" placement
+
+    - name: Create the Placement API service endpoints
+      shell: >
+        (openstack endpoint list -f value -c Region -c 'Service Type' -c Interface | 
+         grep '^RegionOne placement {{ item }}$') ||
+        openstack endpoint create --region RegionOne placement {{ item }} http://control:8778
+      with_items:
+        - public
+        - internal
+        - admin
+
+    - name: Install and configure Nova components
+      yum:
+        name:
+          - openstack-nova-api
+          - openstack-nova-conductor
+          - openstack-nova-console
+          - openstack-nova-novncproxy
+          - openstack-nova-scheduler
+          - openstack-nova-placement-api
+        state: installed
+      register: nova_installed
+
+    - name: Enable only the compute and metadata APIs
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: DEFAULT
+        option: enabled_apis
+        value: osapi_compute,metadata
+
+    - name: Configure database access
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: '{{ item.section }}'
+        option: connection
+        value: '{{ item.value }}'
+      with_items:
+        - {section: api_database, value: 'mysql+pymysql://nova:12345@controller/nova_api'}
+        - {section: database, value: 'mysql+pymysql://nova:12345@controller/nova'}
+
+    - name: Configure RabbitMQ message queue access
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: DEFAULT
+        option: transport_url
+        value: rabbit://openstack:12345@control
+
+    - name: Configure authentication strategy
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: api
+        option: auth_strategy
+        value: keystone
+
+    - name: Remove Glance auth token section
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: keystone_authtoken
+        state: absent
+      when: 'nova_installed.changed'
+
+    - name: Configure Nova identity access
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: keystone_authtoken
+        option: '{{ item.option }}'
+        value: '{{ item.value }}'
+      with_items:
+        - {option: auth_uri, value: 'http://controller:5000'}
+        - {option: auth_url, value: 'http://control:35357'}
+        - {option: memcached_servers, value: 'control:11211'}
+        - {option: auth_type, value: password}
+        - {option: project_domain_name, value: default}
+        - {option: user_domain_name, value: default}
+        - {option: project_name, value: service}
+        - {option: username, value: nova}
+
+    - name: Configure Nova identity password
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: keystone_authtoken
+        option: password
+        value: 12345
+
+    - name: Configure the my_ip option to use the management interface IP address of the controller node
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: DEFAULT
+        option: my_ip
+        value: '{{ management_ip.stdout }}'
+
+    - name: Enable support for the Networking service
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: DEFAULT
+        option: '{{ item.option }}'
+        value: '{{ item.value}}'
+      with_items:
+        - {option: use_neutron, value: True}
+        - {option: firewall_driver, value: 'nova.virt.firewall.NoopFirewallDriver'}
+
+     - name: Configure the VNC proxy to use the management interface IP address of the controller node
