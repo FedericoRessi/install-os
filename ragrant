@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -xeu
+set -eu
 
 SOURCE_DIR="$(pwd)"
 
@@ -18,7 +18,7 @@ TARGET_DIR=${TARGET_DIR:-$(realpath "${SOURCE_DIR}" "--relative-to=${HOME}")}
 
 SOURCE_FILES=($(ls "${SOURCE_DIR}"))
 
-rsync -uva \
+rsync -ua \
   --rsync-path="mkdir -p '${TARGET_DIR}' && rsync" \
   -e "ssh -F '${TARGET_CONFIG_FILE}'" \
   --exclude '.*' \

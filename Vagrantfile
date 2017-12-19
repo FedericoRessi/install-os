@@ -25,12 +25,12 @@ Vagrant.configure("2") do |config|
     # management network
     control.vm.network "private_network", ip: "192.168.10.100"
     # provider network
-	  control.vm.network "private_network", ip: "192.168.11.100"
-	  control.vm.provider "libvirt" do |vm|
-	    vm.memory = 8192
-	  end
-    config.vm.provider "virtualbox" do |vbox|
-      vbox.memory = 8192
+	control.vm.network "private_network", ip: "192.168.11.100"
+	control.vm.provider "libvirt" do |vm|
+	  vm.memory = 8192
+	end
+    config.vm.provider "virtualbox" do |vm|
+      vm.memory = 8192
     end
   end
 
@@ -55,7 +55,7 @@ Vagrant.configure("2") do |config|
       compute.vm.provider "libvirt" do |vm|
         vm.cpus = 1
         vm.memory = 8192
-	    end
+      end
       compute.vm.provider "virtualbox" do |vm|
         vm.cpus = 1
         vm.memory = 8192
