@@ -26,4 +26,4 @@ rsync -ua \
   "${SOURCE_FILES[@]}" \
   "target:${TARGET_DIR}" 
 
-ssh -F "${TARGET_CONFIG_FILE}" target "cd '${TARGET_DIR}' && vagrant $@"
+ssh -t -F "${TARGET_CONFIG_FILE}" target "cd '${TARGET_DIR}' && vagrant $@"
