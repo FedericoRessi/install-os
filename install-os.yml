@@ -707,7 +707,8 @@
 
     - name: Create the cell1 cell
       become_user: nova
-      command:
+      shell: |
+        nova-manage cell_v2 list_cells | grep -e "\scell1\s" ||
         nova-manage cell_v2 create_cell --name=cell1 --verbose
 
     - name: Populate the nova database
@@ -716,10 +717,9 @@
         nova-manage db sync
 
     - name: Verify nova cell0 and cell1 are registered correctly
-      shell: |
-        cells=($(
-          nova-manage cell_v2 list_cells |
-          grep -e "\scell0\s" -e "\scell1\s" -o |
-          sort
-        ))
-        [ "${#cells[@]}" == "2" ]
+      shell:
+        nova-manage cell_v2 list_cells | grep -e "\s{{ item }}\s"
+      with_items:
+        - cell0
+        - cell1
+
