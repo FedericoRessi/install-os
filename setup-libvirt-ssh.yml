@@ -7,70 +7,97 @@
 
   tasks:
 
-   - name: "Create {{ user }} user"
-     become: true
-     user:
-       name: "{{ user }}"
-       groups: "libvirt"
+    - name: Create {{ user }} user
+      become: true
+      user:
+        name: "{{ user }}"
+        groups: "libvirt"
 
-   - name: "Create ~/.ssh directory"
-     become: true
-     file:
-       path: "{{ home }}/.ssh"
-       mode: 0700
-       state: directory
-       owner: "{{ user }}"
+    - name: Create ~/.ssh directory
+      become: true
+      file:
+        path: "{{ home }}/.ssh"
+        mode: 0700
+        state: directory
+        owner: "{{ user }}"
 
-   - name: "Create ~/.ssh/authorized_keys file"
-     become: true
-     file:
-       path: "{{ home }}/.ssh/authorized_keys"
-       mode: 0600
-       state: touch
-       owner: "{{ user }}"
+    - name: Create ~/.ssh/authorized_keys file
+      become: true
+      file:
+        path: "{{ home }}/.ssh/authorized_keys"
+        mode: 0600
+        state: touch
+        owner: "{{ user }}"
 
-   - name: "Add SSH key to {{ user }} user"
-     become: true
-     lineinfile: 
-       path: "{{ home }}/.ssh/authorized_keys"
-       line: "{{ lookup('env','TARGET_PUB_KEY') }}"
+    - name: Add SSH key to {{ user }} user
+      become: true
+      lineinfile: 
+        path: "{{ home }}/.ssh/authorized_keys"
+        line: "{{ lookup('env','TARGET_PUB_KEY') }}"
 
-   - name: "Install packages to use libvirt"
-     become: true
-     yum:
-       name: "{{ item }}"
-       state: present
-     with_items:
-       - gcc
-       - libvirt
-       - libvirt-devel
-       - qemu
-       - qemu-kvm
+    - name: Install packages to use libvirt
+      become: true
+      yum:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - gcc
+        - libvirt
+        - libvirt-devel
+        - qemu
+        - qemu-kvm
 
-   - name: "Start and enable the libvirtd service"
-     systemd:
-       name: libvirtd
-       enabled: yes
-       state: started
+    - name: Start and enable the libvirtd service
+      systemd:
+        name: libvirtd
+        enabled: yes
+        state: started
 
-   - name: "Install rsync tool"
-     become: true
-     yum:
-       name: rsync
-       state: present
+    - name: Install rsync tool
+      become: true
+      yum:
+        name: rsync
+        state: present
 
-   - name: "Get vagrant RPM"
-     get_url:
-       url: "https://releases.hashicorp.com/vagrant/2.0.1/vagrant_2.0.1_x86_64.rpm"
-       dest: /tmp/vagrant_2.0.1_x86_64.rpm
+    - name: Get vagrant RPM
+      get_url:
+        url: "https://releases.hashicorp.com/vagrant/2.0.1/vagrant_2.0.1_x86_64.rpm"
+        dest: /tmp/vagrant_2.0.1_x86_64.rpm
    
-   - name: "Install vagrant"
-     become: true
-     yum:
-       name: /tmp/vagrant_2.0.1_x86_64.rpm
-       state: present
+    - name: Install vagrant
+      become: true
+      yum:
+        name: /tmp/vagrant_2.0.1_x86_64.rpm
+        state: present
 
-   - name: "Install livirt vagrant plugin"
-     become: true
-     command:
-       vagrant plugin install vagrant-libvirt
+    - name: Install livirt vagrant plugin
+      become: true
+      command:
+        vagrant plugin install vagrant-libvirt
+
+    - name: Check to see if pip is already installed
+      command: "pip --version"
+      ignore_errors: true
+      register: pip_is_installed
+      changed_when: false
+
+    - name: Set up PIP
+      when: pip_is_installed.rc != 0
+      block:
+      
+        - name: download get-pip.py
+          get_url:
+            url: https://bootstrap.pypa.io/get-pip.py
+            dest: /tmp
+
+        - name: install pip
+          command: "python /tmp/get-pip.py"
+
+        - name: delete get-pip.py
+          file:
+            path: /tmp/get-pip.py
+            state: absent
+
+    - name: Install ansible
+      pip:
+        name: ansible
