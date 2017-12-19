@@ -52,3 +52,25 @@
        name: libvirtd
        enabled: yes
        state: started
+
+   - name: "Install rsync tool"
+     become: true
+     yum:
+       name: rsync
+       state: present
+
+   - name: "Get vagrant RPM"
+     get_url:
+       url: "https://releases.hashicorp.com/vagrant/2.0.1/vagrant_2.0.1_x86_64.rpm"
+       dest: /tmp/vagrant_2.0.1_x86_64.rpm
+   
+   - name: "Install vagrant"
+     become: true
+     yum:
+       name: /tmp/vagrant_2.0.1_x86_64.rpm
+       state: present
+
+   - name: "Install livirt vagrant plugin"
+     become: true
+     command:
+       vagrant plugin install vagrant-libvirt

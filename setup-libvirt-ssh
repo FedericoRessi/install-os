@@ -2,7 +2,6 @@
 
 set -eu
 
-
 TARGET_HOST_DIR=${TARGET_HOST_DIR:-$(pwd)/.install-os}
 mkdir -p "${TARGET_HOST_DIR}"
 

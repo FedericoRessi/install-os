@@ -5,9 +5,9 @@ Vagrant.configure("2") do |config|
   config.vm.provider "libvirt" do |vm|
     if File.file?('.install-os/host')
       vm.host = File.read('.install-os/host').gsub(/\s+/, "")
+      vm.username = "stack"
+      vm.connect_via_ssh = true
     end
-    vm.username = "stack"
-    vm.connect_via_ssh = true
     vm.cpus = 1
     vm.nested = true
     vm.memory = 4096

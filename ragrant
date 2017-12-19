@@ -1,0 +1,29 @@
+#!/bin/bash
+
+set -xeu
+
+SOURCE_DIR="$(pwd)"
+
+TARGET_HOST_DIR="${TARGET_HOST_DIR:-${SOURCE_DIR}/.install-os}"
+TARGET_CONFIG_FILE="${TARGET_CONFIG_FILE:-${TARGET_HOST_DIR}/ssh_config}"
+if ! [ -r "${TARGET_CONFIG_FILE}" ]; then
+	echo "
+		Please execute setup-libvirt-ssh script first
+			'$(dirname $0)/setup-libvirt-ssh' <target-host>
+	"
+	exit 1
+fi
+
+TARGET_DIR=${TARGET_DIR:-$(realpath "${SOURCE_DIR}" "--relative-to=${HOME}")}
+
+SOURCE_FILES=($(ls "${SOURCE_DIR}"))
+
+rsync -uva \
+  --rsync-path="mkdir -p '${TARGET_DIR}' && rsync" \
+  -e "ssh -F '${TARGET_CONFIG_FILE}'" \
+  --exclude '.*' \
+  --delete \
+  "${SOURCE_FILES[@]}" \
+  "target:${TARGET_DIR}" 
+
+ssh -F "${TARGET_CONFIG_FILE}" target "cd '${TARGET_DIR}' && vagrant $@"
