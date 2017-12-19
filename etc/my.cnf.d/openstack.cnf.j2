@@ -1,5 +1,5 @@
 [mysqld]
-bind-address = {{ get_management_ip.stdout }}
+bind-address = {{ management_ip.stdout }}
 
 default-storage-engine = innodb
 innodb_file_per_table = on
