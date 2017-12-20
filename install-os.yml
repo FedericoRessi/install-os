@@ -556,132 +556,123 @@
           - openstack-nova-scheduler
           - openstack-nova-placement-api
         state: installed
-      register: nova_installed
-
-    - name: Enable only the compute and metadata APIs
-      ini_file:
-        path: /etc/nova/nova.conf
-        section: DEFAULT
-        option: enabled_apis
-        value: osapi_compute,metadata
-
-    - name: Configure database access
-      ini_file:
-        path: /etc/nova/nova.conf
-        section: '{{ item.section }}'
-        option: connection
-        value: '{{ item.value }}'
-      with_items:
-        - {section: api_database, value: 'mysql+pymysql://nova:12345@control/nova_api'}
-        - {section: database, value: 'mysql+pymysql://nova:12345@control/nova'}
-
-    - name: Configure RabbitMQ message queue access
-      ini_file:
-        path: /etc/nova/nova.conf
-        section: DEFAULT
-        option: transport_url
-        value: rabbit://openstack:12345@control
-
-    - name: Configure authentication strategy
-      ini_file:
-        path: /etc/nova/nova.conf
-        section: api
-        option: auth_strategy
-        value: keystone
 
     - name: Remove Nova auth token section
       ini_file:
         path: /etc/nova/nova.conf
-        section: keystone_authtoken
+        section: '{{ item }}'
         state: absent
-      when: 'nova_installed.changed'
+      with_items:
+        - keystone_authtoken
+        - placement
 
-    - name: Configure Nova identity access
+    - name: Configure Nova control components
       ini_file:
         path: /etc/nova/nova.conf
-        section: keystone_authtoken
+        section: '{{ item.section }}'
         option: '{{ item.option }}'
         value: '{{ item.value }}'
       with_items:
-        - {option: auth_uri, value: 'http://control:5000'}
-        - {option: auth_url, value: 'http://control:35357'}
-        - {option: memcached_servers, value: 'control:11211'}
-        - {option: auth_type, value: password}
-        - {option: project_domain_id, value: default}
-        - {option: user_domain_id, value: default}
-        - {option: project_name, value: service}
-        - {option: username, value: nova}
-        - {option: password, value: 12345}
 
-    - name: Configure the my_ip option to use the management interface IP address of the control node
-      ini_file:
-        path: /etc/nova/nova.conf
-        section: DEFAULT
-        option: my_ip
-        value: '{{ management_ip.stdout }}'
+        - section: DEFAULT
+          option: enabled_apis
+          value: osapi_compute,metadata
+        - section: DEFAULT
+          option: my_ip
+          value: '{{ management_ip.stdout }}'
+        - section: DEFAULT
+          option: transport_url
+          value: rabbit://openstack:12345@control
+        - section: DEFAULT
+          option: use_neutron
+          value: True
+        - section: DEFAULT
+          option: firewall_driver
+          value: 'nova.virt.firewall.NoopFirewallDriver'
 
-    - name: Enable support for the Networking service
-      ini_file:
-        path: /etc/nova/nova.conf
-        section: DEFAULT
-        option: '{{ item.option }}'
-        value: '{{ item.value}}'
-      with_items:
-        - {option: use_neutron, value: True}
-        - {option: firewall_driver, value: 'nova.virt.firewall.NoopFirewallDriver'}
+        - section: api
+          option: auth_strategy
+          value: keystone
 
-    - name: Configure the VNC proxy to use the management interface IP address of the control node
-      ini_file:
-        path: /etc/nova/nova.conf
-        section: vnc
-        option: '{{ item.option }}'
-        value: '{{ item.value}}'
-      with_items:
-        - {option: vncserver_listen, value: '$my_ip'}
-        - {option: vncserver_proxyclient_address, value: '$my_ip'}
+        - section: api_database
+          option: connection
+          value: 'mysql+pymysql://nova:12345@control/nova_api'
 
-    - name: Configure the location of the Image service API
-      ini_file:
-        path: /etc/nova/nova.conf
-        section: glance
-        option: api_servers
-        value: 'http://control:9292'
+        - section: database
+          option: connection
+          value: 'mysql+pymysql://nova:12345@control/nova'
 
-    - name: Configure the lock path
-      ini_file:
-        path: /etc/nova/nova.conf
-        section: oslo_concurrency
-        option: lock_path
-        value: /var/lib/nova/tmp
+        - section: glance
+          option: api_servers
+          value: 'http://control:9292'
 
-    - name: Remove Glance auth token section
-      ini_file:
-        path: /etc/nova/nova.conf
-        section: placement
-        state: absent
-      when: 'nova_installed.changed'
+        - section: keystone_authtoken
+          option: auth_uri
+          value: 'http://control:5000'
+        - section: keystone_authtoken
+          option: auth_url
+          value: 'http://control:35357'
+        - section: keystone_authtoken
+          option: memcached_servers
+          value: 'control:11211'
+        - section: keystone_authtoken
+          option: auth_type
+          value: password
+        - section: keystone_authtoken
+          option: project_domain_id
+          value: default
+        - section: keystone_authtoken
+          option: user_domain_id
+          value: default
+        - section: keystone_authtoken
+          option: project_name
+          value: service
+        - section: keystone_authtoken
+          option: username
+          value: nova
+        - section: keystone_authtoken
+          option: password
+          value: 12345
 
-    - name: Configure placement API
-      ini_file:
-        path: /etc/nova/nova.conf
-        section: placement
-        option: '{{ item.option }}'
-        value: '{{ item.value }}'
-      with_items:
-        - {option: os_region_name, value: RegionOne}
-        - {option: project_domain_id, value: default}
-        - {option: project_name, value: service}
-        - {option: auth_type, value: password}
-        - {option: user_domain_id, value: default}
-        - {option: auth_url, value: 'http://control:35357/v3'}
-        - {option: username, value: placement}
+        - section: placement
+          option: os_region_name
+          value: RegionOne
+        - section: placement
+          option: project_domain_id
+          value: default
+        - section: placement
+          option: project_name
+          value: service
+        - section: placement
+          option: auth_type
+          value: password
+        - section: placement
+          option: user_domain_id
+          value: default
+        - section: placement
+          option: auth_url
+          value: 'http://control:35357/v3'
+        - section: placement
+          option: username
+          value: placement
+        - section: placement
+          option: password
+          value: 12345
 
-    - name: Configure placement API password
-      ini_file:
-        path: /etc/nova/nova.conf
-        section: placement
-        option: password
-        value: 12345
+        - section: oslo_concurrency
+          option: lock_path
+          value: /var/lib/nova/tmp
+
+        - section: scheduler
+          option: discover_hosts_in_cells_interval
+          value: 30
+
+        - section: vnc
+          option: vncserver_listen
+          value: '$my_ip'
+        - section: vnc
+          option: vncserver_proxyclient_address
+          value: '$my_ip'
 
     - name: Enable access to the Placement API 
       template:
@@ -749,7 +740,6 @@
       yum:
         name: openstack-nova-compute
         state: installed
-      register: nova_compute_installed
 
     - name: Remove keystone_authtoken from Nova compute conf file
       ini_file:
@@ -759,7 +749,6 @@
       with_items:
         - keystone_authtoken
         - placement
-      when: 'nova_compute_installed.changed'
 
     - name: Configure Nova compute
       ini_file:
@@ -768,6 +757,11 @@
         option: '{{ item.option }}'
         value: '{{ item.value }}'
       with_items:
+
+        - section: api
+          option: auth_strategy
+          value: keystone
+
         - section: DEFAULT
           option: enabled_apis
           value: osapi_compute,metadata
@@ -783,9 +777,11 @@
         - section: DEFAULT
           option: firewall_driver
           value: nova.virt.firewall.NoopFirewallDriver
-        - section: api
-          option: auth_strategy
-          value: keystone
+
+        - section: glance
+          option: api_servers
+          value: 'http://control:9292'
+
         - section: keystone_authtoken
           option: auth_uri
           value: 'http://control:5000'
@@ -813,6 +809,7 @@
         - section: keystone_authtoken
           option: password
           value: 12345
+
         - section: vnc
           option: enabled
           value: True
@@ -825,12 +822,11 @@
         - section: vnc
           option: novncproxy_base_url
           value: 'http://control:6080/vnc_auto.html'
-        - section: glance
-          option: api_servers
-          value: 'http://control:9292'
+
         - section: oslo_concurrency
           option: lock_path
           value: /var/lib/nova/tmp
+
         - section: placement
           option: os_region_name
           value: RegionOne
