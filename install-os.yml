@@ -109,18 +109,22 @@
     OS_PROJECT_DOMAIN_NAME: Default
     OS_AUTH_URL: http://control:35357/v3
     OS_IDENTITY_API_VERSION: 3
-
   tasks:
 
-    - name: Install MariaDB service
+    - name: Install ifconfig
       yum:
-        name: mariadb,mariadb-server,python2-PyMySQL,MySQL-python 
+        name: net-tools
         state: installed
 
     - name: Get management interface IP
       shell: >
         ifconfig eth1 | awk '/\sinet\s/{print $2}'
       register: management_ip
+
+    - name: Install MariaDB service
+      yum:
+        name: mariadb,mariadb-server,python2-PyMySQL,MySQL-python
+        state: installed
 
     - name: Enable access to database via the management network
       template:
@@ -150,7 +154,8 @@
 
     - name: Add openstack user to RabbitMQ service
       shell: |
-        rabbitmqctl add_user openstack 1234
+        rabbitmqctl add_user openstack 12345
+        rabbitmqctl change_password openstack 12345
         rabbitmqctl set_permissions openstack ".*" ".*" ".*"
 
     - name: Install Memcached service
@@ -406,8 +411,8 @@
            {option: auth_url, value: 'http://control:35357'},
            {option: memcached_servers, value: 'control:11211'},
            {option: auth_type, value: password},
-           {option: project_domain_name, value: default},
-           {option: user_domain_name, value: default},
+           {option: project_domain_name, value: Default},
+           {option: user_domain_name, value: Default},
            {option: project_name, value: service},
            {option: username, value: glance}]
 
@@ -602,17 +607,11 @@
         - {option: auth_url, value: 'http://control:35357'}
         - {option: memcached_servers, value: 'control:11211'}
         - {option: auth_type, value: password}
-        - {option: project_domain_name, value: default}
-        - {option: user_domain_name, value: default}
+        - {option: project_domain_name, value: Default}
+        - {option: user_domain_name, value: Default}
         - {option: project_name, value: service}
         - {option: username, value: nova}
-
-    - name: Configure Nova identity password
-      ini_file:
-        path: /etc/nova/nova.conf
-        section: keystone_authtoken
-        option: password
-        value: 12345
+        - {option: password, value: 12345}
 
     - name: Configure the my_ip option to use the management interface IP address of the control node
       ini_file:
@@ -722,4 +721,159 @@
       with_items:
         - cell0
         - cell1
+    - name: Enable and start Nova API, consoleauth, conductor services
+      systemd:
+        name: '{{ item }}'
+        state: restarted
+      with_items:
+        - openstack-nova-api
+        - openstack-nova-consoleauth
+        - openstack-nova-conductor
 
+
+- hosts: compute1,compute2
+  become: true
+  tasks:
+
+    - name: Install ifconfig
+      yum:
+        name: net-tools
+        state: installed
+
+    - name: Get management interface IP
+      shell: >
+        ifconfig eth1 | awk '/\sinet\s/{print $2}'
+      register: management_ip
+
+    - name: Install Nova compute packages
+      yum:
+        name: openstack-nova-compute
+        state: installed
+      register: nova_compute_installed
+
+    - name: Remove keystone_authtoken from Nova compute conf file
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: '{{ item }}'
+        state: absent
+      with_items:
+        - keystone_authtoken
+        - placement
+      when: 'nova_compute_installed.changed'
+
+    - name: Configure Nova compute
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: '{{ item.section }}'
+        option: '{{ item.option }}'
+        value: '{{ item.value }}'
+      with_items:
+        - section: DEFAULT
+          option: enabled_apis
+          value: osapi_compute,metadata
+        - section: DEFAULT
+          option: transport_url
+          value: 'rabbit://openstack:12345@control'
+        - section: DEFAULT
+          option: my_ip
+          value: '{{ management_ip.stdout }}'
+        - section: DEFAULT
+          option: use_neutron
+          value: True
+        - section: DEFAULT
+          option: firewall_driver
+          value: nova.virt.firewall.NoopFirewallDriver
+        - section: api
+          option: auth_strategy
+          value: keystone
+        - section: keystone_authtoken
+          option: auth_uri
+          value: 'http://control:5000'
+        - section: keystone_authtoken
+          option: auth_url
+          value: 'http://control:35357'
+        - section: keystone_authtoken
+          option: memcached_servers
+          value: 'control:11211'
+        - section: keystone_authtoken
+          option: auth_type
+          value: password
+        - section: keystone_authtoken
+          option: project_domain_name
+          value: Default
+        - section: keystone_authtoken
+          option: user_domain_name
+          value: Default
+        - section: keystone_authtoken
+          option: project_name
+          value: service
+        - section: keystone_authtoken
+          option: username
+          value: nova
+        - section: keystone_authtoken
+          option: password
+          value: 12345
+        - section: vnc
+          option: enabled
+          value: True
+        - section: vnc,
+          option: vncserver_listen
+          value: 0.0.0.0
+        - section: vnc
+          option: vncserver_proxyclient_address
+          value: '$my_ip'
+        - section: vnc
+          option: novncproxy_base_url
+          value: 'http://control:6080/vnc_auto.html'
+        - section: glance
+          option: api_servers
+          value: 'http://control:9292'
+        - section: oslo_concurrency
+          option: lock_path
+          value: /var/lib/nova/tmp
+        - section: placement
+          option: os_region_name
+          value: RegionOne
+        - section: placement
+          option: project_domain_name
+          value: Default
+        - section: placement
+          option: project_name
+          value: service
+        - section: placement
+          option: auth_type
+          value: password
+        - section: placement
+          option: user_domain_name
+          value: Default
+        - section: placement
+          option: auth_url
+          value: 'http://control:35357/v3'
+        - section: placement,
+          option: username
+          value: placement
+        - section: placement
+          option: password
+          value: 12345
+
+    - name: Determine whether compute node supports hardware acceleration
+      command:
+        grep -e vmx -e svm /proc/cpuinfo
+      ignore_errors: true
+      register: has_hardware_acceleration
+
+    - name: Disable hardware acceleration
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: libvirt
+        option: virt_type
+        value: qemu
+      when: has_hardware_acceleration.rc != 0
+
+    - name: Enable and start libvirtd and Nova compute services
+      systemd:
+        name: '{{ item }}'
+        state: restarted
+      with_items:
+        - libvirtd
+        - openstack-nova-compute
