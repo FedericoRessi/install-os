@@ -105,8 +105,8 @@
     OS_USERNAME: admin
     OS_PASSWORD: 12345
     OS_PROJECT_NAME: admin
-    OS_USER_DOMAIN_NAME: Default
-    OS_PROJECT_DOMAIN_NAME: Default
+    OS_USER_DOMAIN_ID: default
+    OS_PROJECT_DOMAIN_ID: default
     OS_AUTH_URL: http://control:35357/v3
     OS_IDENTITY_API_VERSION: 3
   tasks:
@@ -411,8 +411,8 @@
            {option: auth_url, value: 'http://control:35357'},
            {option: memcached_servers, value: 'control:11211'},
            {option: auth_type, value: password},
-           {option: project_domain_name, value: Default},
-           {option: user_domain_name, value: Default},
+           {option: project_domain_id, value: default},
+           {option: user_domain_id, value: default},
            {option: project_name, value: service},
            {option: username, value: glance}]
 
@@ -607,8 +607,8 @@
         - {option: auth_url, value: 'http://control:35357'}
         - {option: memcached_servers, value: 'control:11211'}
         - {option: auth_type, value: password}
-        - {option: project_domain_name, value: Default}
-        - {option: user_domain_name, value: Default}
+        - {option: project_domain_id, value: default}
+        - {option: user_domain_id, value: default}
         - {option: project_name, value: service}
         - {option: username, value: nova}
         - {option: password, value: 12345}
@@ -669,10 +669,10 @@
         value: '{{ item.value }}'
       with_items:
         - {option: os_region_name, value: RegionOne}
-        - {option: project_domain_name, value: Default}
+        - {option: project_domain_id, value: default}
         - {option: project_name, value: service}
         - {option: auth_type, value: password}
-        - {option: user_domain_name, value: Default}
+        - {option: user_domain_id, value: default}
         - {option: auth_url, value: 'http://control:35357/v3'}
         - {option: username, value: placement}
 
@@ -799,11 +799,11 @@
           option: auth_type
           value: password
         - section: keystone_authtoken
-          option: project_domain_name
-          value: Default
+          option: project_domain_id
+          value: default
         - section: keystone_authtoken
-          option: user_domain_name
-          value: Default
+          option: user_domain_id
+          value: default
         - section: keystone_authtoken
           option: project_name
           value: service
@@ -816,7 +816,7 @@
         - section: vnc
           option: enabled
           value: True
-        - section: vnc,
+        - section: vnc
           option: vncserver_listen
           value: 0.0.0.0
         - section: vnc
@@ -835,8 +835,8 @@
           option: os_region_name
           value: RegionOne
         - section: placement
-          option: project_domain_name
-          value: Default
+          option: project_domain_id
+          value: default
         - section: placement
           option: project_name
           value: service
@@ -844,12 +844,12 @@
           option: auth_type
           value: password
         - section: placement
-          option: user_domain_name
-          value: Default
+          option: user_domain_id
+          value: default
         - section: placement
           option: auth_url
           value: 'http://control:35357/v3'
-        - section: placement,
+        - section: placement
           option: username
           value: placement
         - section: placement
