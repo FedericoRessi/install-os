@@ -720,6 +720,7 @@
         - openstack-nova-api
         - openstack-nova-consoleauth
         - openstack-nova-conductor
+        - openstack-nova-scheduler
 
 
 - hosts: compute1,compute2
