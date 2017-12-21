@@ -176,12 +176,12 @@
         enabled: yes
         state: restarted
 
-    - name: Create database for keystone
+    - name: Create database for Keystone
       mysql_db:
         name: keystone
         state: present
 
-    - name: Grant proper access to the keystone database
+    - name: Grant proper access to the Keystone database
       mysql_user:
         name: keystone
         host: '{{ item }}'
@@ -339,7 +339,7 @@
         name: glance
         state: present
 
-    - name: Grant proper access to the keystone database
+    - name: Grant proper access to the Glance database
       mysql_user:
         name: glance
         host: '{{ item }}'
@@ -538,7 +538,7 @@
 
     - name: Create the Placement API service endpoints
       shell: >
-        (openstack endpoint list -f value -c Region -c 'Service Type' -c Interface | 
+        (openstack endpoint list -f value -c Region -c 'Service Type' -c Interface |
          grep '^RegionOne placement {{ item }}$') ||
         openstack endpoint create --region RegionOne placement {{ item }} http://control:8778
       with_items:
@@ -721,6 +721,45 @@
         - openstack-nova-consoleauth
         - openstack-nova-conductor
         - openstack-nova-scheduler
+
+    - name: Create database for Neutron
+      mysql_db:
+        name: neutron
+        state: present
+
+    - name: Grant proper access to the Neutron database
+      mysql_user:
+        name: neutron
+        host: '{{ item }}'
+        password: 12345
+        priv: 'neutron.*:ALL'
+        state: present
+      with_items:
+        - 'localhost'
+        - '%'
+
+    - name: Create the neutron user
+      shell: >
+        openstack user show neutron ||
+        openstack user create --domain default --password 12345 neutron
+
+    - name: Add the admin role to the neutron user and service project
+      command:
+        openstack role add --project service --user neutron admin
+
+    - name: Create Neutron service entity
+      command:
+        openstack service create --name neutron --description "OpenStack Networking" network
+
+    - name: Create the Networking service API endpoints
+      shell: >
+        (openstack endpoint list -f value -c Region -c 'Service Type' -c Interface |
+         grep '^RegionOne network {{ item }}$') ||
+        openstack endpoint create --region RegionOne network {{ item }} http://control:9696
+      with_items:
+        - public
+        - internal
+        - admin
 
 
 - hosts: compute1,compute2
