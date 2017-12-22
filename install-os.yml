@@ -315,17 +315,17 @@
           Password: demo
 
     - name: Provide openrc scripts
-      become: false
+      become_user: vagrant
       template:
         src: 'openrc/{{ item }}.j2'
-        dest: '{{ ansible_env.HOME }}/{{ item }}'
+        dest: '/home/vagrant/{{ item }}'
       with_items:
         - admin-openrc
         - demo-openrc
 
     - name: Test openrc scripts
       shell: |
-        source /root/.openrc/{{ item }}
+        source '/home/vagrant/{{ item }}'
         openstack token issue
       with_items:
         - admin-openrc
@@ -1014,7 +1014,7 @@
           value: true
         - section: neutron
           option: metadata_proxy_shared_secret
-          value: METADATA_SECRET
+          value: 12345
 
     - name: Create /etc/neutron/plugin.ini symlink
       file:
@@ -1043,6 +1043,29 @@
         - neutron-metadata-agent
         - neutron-l3-agent
 
+    - name: Verify Nova services are enabled and running
+      shell: >
+        openstack compute service list -c Binary -c Host -c Zone -c Status -c State -f value |
+        grep '^{{ item }} enabled up$'
+      with_items:
+        - nova-consoleauth control internal
+        - nova-conductor control internal
+        - nova-scheduler control internal
+
+    - name: Verify API endpoints in the Identity service to verify connectivity with the Identity service
+      command:
+        openstack catalog show {{ item }} -f value -c endpoints
+      with_items:
+        - keystone
+        - glance
+        - placement
+        - nova
+        - neutron
+
+    - name: Verify connectivity with the Image service
+      shell: >
+        openstack image list -c Name -c Status -f value |
+        grep '^cirros active$'
 
 - hosts: compute1,compute2
   become: true
