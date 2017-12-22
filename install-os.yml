@@ -200,16 +200,18 @@
     - name: Configure Keystone database access
       ini_file:
         path: /etc/keystone/keystone.conf
-        section: database
-        option: connection
-        value: 'mysql+pymysql://keystone:12345@control/keystone'
+        section: '{{ item.section }}'
+        option: '{{ item.option }}'
+        value: '{{ item.value }}'
+      with_items:
 
-    - name: Configure the Fernet token provider
-      ini_file:
-        path: /etc/keystone/keystone.conf
-        section: token
-        option: provider
-        value: fernet
+        - section: database
+          option: connection
+          value: 'mysql+pymysql://keystone:12345@control/keystone'
+
+        - section: token
+          option: provider
+          value: fernet
 
     - name: Populate the Identity service database
       become_user: keystone
@@ -312,16 +314,11 @@
         responses:
           Password: demo
 
-    - name: Provide openrc scripts directory
-      file:
-        path: /root/.openrc
-        state: directory
-        mode: 0700
-
     - name: Provide openrc scripts
+      become: false
       template:
         src: 'openrc/{{ item }}.j2'
-        dest: '/root/.openrc/{{ item }}'
+        dest: '{{ ansible_env.HOME }}/{{ item }}'
       with_items:
         - admin-openrc
         - demo-openrc
@@ -405,26 +402,28 @@
         option: '{{ item[1].option }}'
         value: '{{ item[1].value }}'
       with_nested:
-        - ['/etc/glance/glance-api.conf',
-           '/etc/glance/glance-registry.conf']
-        - [{option: auth_uri, value: 'http://control:5000'},
-           {option: auth_url, value: 'http://control:35357'},
-           {option: memcached_servers, value: 'control:11211'},
-           {option: auth_type, value: password},
-           {option: project_domain_id, value: default},
-           {option: user_domain_id, value: default},
-           {option: project_name, value: service},
-           {option: username, value: glance}]
 
-    - name: Configure Keystone auth password
-      ini_file:
-        path: '{{ item }}'
-        section: keystone_authtoken
-        option: password
-        value: 12345
-      with_items:
-        - /etc/glance/glance-api.conf
-        - /etc/glance/glance-registry.conf
+        - - '/etc/glance/glance-api.conf'
+          - '/etc/glance/glance-registry.conf'
+
+        - - option: auth_uri
+            value: 'http://control:5000'
+          - option: auth_url
+            value: 'http://control:35357'
+          - option: memcached_servers
+            value: 'control:11211'
+          - option: auth_type
+            value: password
+          - option: project_domain_id
+            value: default
+          - option: user_domain_id
+            value: default
+          - option: project_name
+            value: service
+          - option: username
+            value: glance
+          - option: password
+            value: 12345
 
     - name: Configure Glance paste-deploy
       ini_file:
@@ -443,9 +442,12 @@
         option: '{{ item.option }}'
         value: '{{ item.value }}'
       with_items:
-        - {option: stores, value: file,http}
-        - {option: default_store, value: file}
-        - {option: filesystem_store_datadir, value: /var/lib/glance/images/}
+        - option: stores
+          value: file,http
+        - option: default_store
+          value: file
+        - option: filesystem_store_datadir
+          value: /var/lib/glance/images/
 
     - name: Populate the Image service database
       become_user: glance
@@ -715,6 +717,7 @@
     - name: Enable and start Nova API, consoleauth, conductor services
       systemd:
         name: '{{ item }}'
+        enabled: yes
         state: restarted
       with_items:
         - openstack-nova-api
@@ -956,25 +959,109 @@
           option: enable_isolated_metadata
           value: true
 
+    - name: Configure the metadata agent
+      ini_file:
+        path: /etc/neutron/metadata_agent.ini
+        section: '{{ item.section }}'
+        option: '{{ item.option }}'
+        value: '{{ item.value }}'
+      with_items:
+
+        - section: DEFAULT
+          option: nova_metadata_ip
+          value: control
+        - section: DEFAULT
+          option: metadata_proxy_shared_secret
+          value: 12345
+
+    - name: Configure the Compute service to use the Networking service
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: '{{ item.section }}'
+        option: '{{ item.option }}'
+        value: '{{ item.value }}'
+      with_items:
+
+        - section: neutron
+          option: url
+          value: 'http://control:9696'
+        - section: neutron
+          option: auth_url
+          value: 'http://control:35357'
+        - section: neutron
+          option: auth_type
+          value: password
+        - section: neutron
+          option: project_domain_id
+          value: default
+        - section: neutron
+          option: user_domain_id
+          value: default
+        - section: neutron
+          option: region_name
+          value: RegionOne
+        - section: neutron
+          option: project_name
+          value: service
+        - section: neutron
+          option: username
+          value: neutron
+        - section: neutron
+          option: password
+          value: 12345
+        - section: neutron
+          option: service_metadata_proxy
+          value: true
+        - section: neutron
+          option: metadata_proxy_shared_secret
+          value: METADATA_SECRET
+
+    - name: Create /etc/neutron/plugin.ini symlink
+      file:
+        src: /etc/neutron/plugins/ml2/ml2_conf.ini
+        dest: /etc/neutron/plugin.ini
+        state: link
+
+    - name: Populate Neutron database
+      become_user: neutron
+      command: >
+        neutron-db-manage
+          --config-file /etc/neutron/neutron.conf
+          --config-file /etc/neutron/plugins/ml2/ml2_conf.ini
+          upgrade head
+
+    - name: Restart the Compute API service
+      systemd:
+        name: '{{ item }}'
+        enabled: yes
+        state: restarted
+      with_items:
+        - openstack-nova-api
+        - neutron-server
+        - neutron-linuxbridge-agent
+        - neutron-dhcp-agent
+        - neutron-metadata-agent
+        - neutron-l3-agent
+
 
 - hosts: compute1,compute2
   become: true
   tasks:
 
-    - name: Install ifconfig
+    - name: Installl compute node components
       yum:
-        name: net-tools
+        name:
+          - ebtables
+          - ipset
+          - net-tools
+          - openstack-nova-compute
+          - openstack-neutron-linuxbridge
         state: installed
 
     - name: Get management interface IP
       shell: >
         ifconfig eth1 | awk '/\sinet\s/{print $2}'
       register: management_ip
-
-    - name: Install Nova compute packages
-      yum:
-        name: openstack-nova-compute
-        state: installed
 
     - name: Remove keystone_authtoken from Nova compute conf file
       ini_file:
@@ -1045,18 +1132,33 @@
           option: password
           value: 12345
 
-        - section: vnc
-          option: enabled
-          value: True
-        - section: vnc
-          option: vncserver_listen
-          value: 0.0.0.0
-        - section: vnc
-          option: vncserver_proxyclient_address
-          value: '$my_ip'
-        - section: vnc
-          option: novncproxy_base_url
-          value: 'http://control:6080/vnc_auto.html'
+        - section: neutron
+          option: url
+          value: 'http://control:9696'
+        - section: neutron
+          option: auth_url
+          value: 'http://control:35357'
+        - section: neutron
+          option: auth_type
+          value: password
+        - section: neutron
+          option: project_domain_id
+          value: default
+        - section: neutron
+          option: user_domain_id
+          value: default
+        - section: neutron
+          option: region_name
+          value: RegionOne
+        - section: neutron
+          option: project_name
+          value: service
+        - section: neutron
+          option: username
+          value: neutron
+        - section: neutron
+          option: password
+          value: 12345
 
         - section: oslo_concurrency
           option: lock_path
@@ -1087,6 +1189,19 @@
           option: password
           value: 12345
 
+        - section: vnc
+          option: enabled
+          value: True
+        - section: vnc
+          option: vncserver_listen
+          value: 0.0.0.0
+        - section: vnc
+          option: vncserver_proxyclient_address
+          value: '$my_ip'
+        - section: vnc
+          option: novncproxy_base_url
+          value: 'http://control:6080/vnc_auto.html'
+
     - name: Determine whether compute node supports hardware acceleration
       command:
         grep -e vmx -e svm /proc/cpuinfo
@@ -1101,10 +1216,101 @@
         value: qemu
       when: has_hardware_acceleration.rc != 0
 
+    - name: Remove database connection option
+      ini_file:
+        path: /etc/neutron/neutron.conf
+        section: database
+        option: connection
+        state: absent
+
+    - name: Remove keystone_authtoken section
+      ini_file:
+        path: /etc/neutron/neutron.conf
+        section: keystone_authtoken
+        state: absent
+
+    - name: Configure Neutron compute components
+      ini_file:
+        path: /etc/neutron/neutron.conf
+        section: '{{ item.section }}'
+        option: '{{ item.option }}'
+        value: '{{ item.value }}'
+      with_items:
+
+        - section: DEFAULT
+          option: transport_url
+          value: rabbit://openstack:12345@control
+        - section: DEFAULT
+          option: auth_strategy
+          value: keystone
+
+        - section: keystone_authtoken
+          option: auth_uri
+          value: 'http://control:5000'
+        - section: keystone_authtoken
+          option: auth_url
+          value: 'http://control:35357'
+        - section: keystone_authtoken
+          option: memcached_servers
+          value: 'control:11211'
+        - section: keystone_authtoken
+          option: auth_type
+          value: password
+        - section: keystone_authtoken
+          option: project_domain_id
+          value: default
+        - section: keystone_authtoken
+          option: user_domain_id
+          value: default
+        - section: keystone_authtoken
+          option: project_name
+          value: service
+        - section: keystone_authtoken
+          option: username
+          value: neutron
+        - section: keystone_authtoken
+          option: password
+          value: 12345
+
+        - section: oslo_concurrency
+          option: lock_path
+          value: /var/lib/neutron/tmp
+
+    - name: Configure self-service networks
+      ini_file:
+        path: /etc/neutron/plugins/ml2/linuxbridge_agent.ini
+        section: '{{ item.section }}'
+        option: '{{ item.option }}'
+        value: '{{ item.value }}'
+      with_items:
+
+        - section: linux_bridge
+          option: physical_interface_mappings
+          value: eth2
+
+        - section: securitygroup
+          option: enable_security_group
+          value: true
+        - section: securitygroup
+          option: firewall_driver
+          value: neutron.agent.linux.iptables_firewall.IptablesFirewallDriver
+
+        - section: vxlan
+          option: enable_vxlan
+          value: true
+        - section: vxlan
+          option: local_ip
+          value: '{{ management_ip.stdout }}'
+        - section: vxlan
+          option: l2_population
+          value: true
+
     - name: Enable and start libvirtd and Nova compute services
       systemd:
         name: '{{ item }}'
+        enabled: yes
         state: restarted
       with_items:
         - libvirtd
         - openstack-nova-compute
+        - neutron-linuxbridge-agent
