@@ -584,7 +584,7 @@
           value: '{{ management_ip.stdout }}'
         - section: DEFAULT
           option: transport_url
-          value: rabbit://openstack:12345@control
+          value: 'rabbit://openstack:12345@control'
         - section: DEFAULT
           option: use_neutron
           value: True
@@ -1280,7 +1280,7 @@
 
         - section: DEFAULT
           option: transport_url
-          value: rabbit://openstack:12345@control
+          value: 'rabbit://openstack:12345@control'
         - section: DEFAULT
           option: auth_strategy
           value: keystone
