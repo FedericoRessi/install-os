@@ -781,6 +781,13 @@
       with_items:
         - keystone_authtoken
 
+    - name: Remove database connection option
+      ini_file:
+        path: /etc/neutron/neutron.conf
+        section: database
+        option: connection
+        state: absent
+
     - name: Configure Neutron server components
       ini_file:
         path: /etc/neutron/neutron.conf
@@ -1066,6 +1073,17 @@
       shell: >
         openstack image list -c Name -c Status -f value |
         grep '^cirros active$'
+
+    - name: List agents to verify successful launch of the neutron agents
+      shell: >
+        openstack network agent list -c Binary -c Alive -c State -c Host -f value |
+        grep '^control True UP {{ item }}$'
+      with_items:
+        - neutron-metadata-agent
+        - neutron-linuxbridge-agent
+        - neutron-l3-agent
+        - neutron-dhcp-agent
+
 
 - hosts: compute1,compute2
   become: true
