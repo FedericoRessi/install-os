@@ -24,4 +24,5 @@ for NODE in "${NODES[@]}"; do
     mkdir -p "target/${NODE}/log"
     vagrant ssh-config "${NODE}" > target/${NODE}/ssh-config
     rsync "--rsh=ssh -F target/${NODE}/ssh-config" "${RSYNC_FLAGS[@]}" "${NODE}:/var/log/" "target/${NODE}/log"
+    rsync "--rsh=ssh -F target/${NODE}/ssh-config" "${RSYNC_FLAGS[@]}" "${NODE}:/etc/" "target/${NODE}/etc"
 done
