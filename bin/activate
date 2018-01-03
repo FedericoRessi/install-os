@@ -1,0 +1,11 @@
+if [ "${INSTALL_OS_BIN_DIR}" == "" ]; then
+    _get_scripts_dir() {
+        local scripts_dir=$(dirname "${BASH_SOURCE[0]}")
+        python -c "import os; print(os.path.realpath('${scripts_dir}'))"
+    }
+
+    INSTALL_OS_BIN_DIR="$(_get_scripts_dir)"
+    unset _get_scripts_dir
+
+    export PATH="${INSTALL_OS_BIN_DIR}:${PATH}"
+fi
