@@ -796,11 +796,14 @@
           option: core_plugin
           value: ml2
         - section: DEFAULT
-          option: service_plugin
+          option: service_plugins
           value: router
         - section: DEFAULT
           option: allow_overlapping_ips
           value: 'true'
+        - section: DEFAULT
+          option: rpc_response_timeout
+          value: 600
         - section: DEFAULT
           option: transport_url
           value: 'rabbit://openstack:12345@control'
