@@ -2,6 +2,9 @@
 
 Vagrant.configure("2") do |config|
 
+  # We don't need synced folders because we fully rely on ansible for provisioning.
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+
   config.vm.provider "libvirt" do |vm|
     if File.file?('.install-os/host')
       vm.host = File.read('.install-os/host').gsub(/\s+/, "")

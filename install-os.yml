@@ -107,7 +107,7 @@
     OS_PROJECT_NAME: admin
     OS_USER_DOMAIN_ID: default
     OS_PROJECT_DOMAIN_ID: default
-    OS_AUTH_URL: http://control:35357/v3
+    OS_AUTH_URL: 'http://control:35357/v3'
     OS_IDENTITY_API_VERSION: 3
   tasks:
 
@@ -226,11 +226,11 @@
         - credential_setup
 
     - name: Bootstrap the Identity service
-      shell: >
-        keystone-manage bootstrap --bootstrap-password 12345 \
-          --bootstrap-admin-url http://control:35357/v3/ \
-          --bootstrap-internal-url http://control:5000/v3/ \
-          --bootstrap-public-url http://control:5000/v3/ \
+      command: >
+        keystone-manage bootstrap --bootstrap-password 12345
+          --bootstrap-admin-url http://control:35357/v3/
+          --bootstrap-internal-url http://control:5000/v3/
+          --bootstrap-public-url http://control:5000/v3/
           --bootstrap-region-id RegionOne
 
     - name: Configure the Apache HTTP server for Keystone
