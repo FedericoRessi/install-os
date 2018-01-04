@@ -14,8 +14,9 @@ if [ ${#NODES[@]} == 0 ]; then
 fi
 
 RSYNC_FLAGS=(
+    -uqa
     --delete
-    -ua
+    --no-links
     "--rsync-path=sudo rsync"
 )
 
