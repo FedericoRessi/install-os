@@ -35,6 +35,9 @@ Vagrant.configure("2") do |config|
     config.vm.provider "virtualbox" do |vm|
       vm.memory = 8192
     end
+
+    # Open httpd port to host machine for accessing to access to dashboard
+    config.vm.network "forwarded_port", guest: 80, host: 8080
   end
 
   config.vm.define "block" do |control|

@@ -1090,6 +1090,26 @@
         - neutron-l3-agent
         - neutron-dhcp-agent
 
+    - name: Install dashboard components
+      yum:
+        name:
+          - openstack-dashboard
+        state: installed
+
+    - name: Configure dashboard components
+      template:
+        src: etc/openstack-dashboard/local_settings
+        dest: /etc/openstack-dashboard/local_settings
+
+    - name: Restart the web server and session storage service
+      systemd:
+        name: '{{ item }}'
+        enabled: yes
+        state: restarted
+      with_items:
+        - httpd
+        - memcached
+
 
 - hosts: compute1,compute2
   become: true
