@@ -1333,7 +1333,7 @@
 
         - section: linux_bridge
           option: physical_interface_mappings
-          value: eth2
+          value: provider:eth2
 
         - section: securitygroup
           option: enable_security_group

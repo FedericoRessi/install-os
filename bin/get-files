@@ -17,6 +17,8 @@ RSYNC_FLAGS=(
     -uqa
     --delete
     --no-links
+    --no-owner
+    --no-group
     "--rsync-path=sudo rsync"
 )
 
