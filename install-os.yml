@@ -995,6 +995,10 @@
         value: '{{ item.value }}'
       with_items:
 
+        - section: cinder
+          option: os_region_name
+          value: RegionOne
+
         - section: neutron
           option: url
           value: 'http://control:9696'
@@ -1109,6 +1113,148 @@
       with_items:
         - httpd
         - memcached
+
+    - name: Create database mysql user for block storage service
+      mysql_db:
+        name: cinder
+        state: present
+
+    - name: Grant proper access to the Cinder database
+      mysql_user:
+        name: cinder
+        host: '{{ item }}'
+        password: 12345
+        priv: 'cinder.*:ALL'
+        state: present
+      with_items:
+        - 'localhost'
+        - '%'
+
+    - name: Create a cinder user
+      shell: >
+        openstack user show cinder ||
+        openstack user create --domain default --password 12345 cinder
+
+    - name: Add the admin role to the cinder user
+      command:
+        openstack role add --project service --user cinder admin
+
+    - name: Create the cinderv2 and cinderv3 service entities
+      command: >
+        openstack service create --name '{{ item.name }}' --description "OpenStack Block Storage" '{{ item.type }}'
+      with_items:
+        - name: cinderv2
+          type: volumev2
+        - name: cinderv3
+          type: volumev3
+
+    - name: Create the Block Storage service API endpoints
+      shell: >
+        (openstack endpoint list -f value -c Region -c 'Service Type' -c Interface |
+         grep '^RegionOne {{ item.type }} {{ item.interface }}$') ||
+        openstack endpoint create --region RegionOne '{{ item.type }}' '{{ item.interface }}' '{{ item.url }}'
+      with_items:
+        - type: volumev2
+          interface: public
+          url: 'http://controller:8776/v2/%(project_id)s'
+        - type: volumev2
+          interface: internal
+          url: 'http://controller:8776/v2/%(project_id)s'
+        - type: volumev2
+          interface: admin
+          url: 'http://controller:8776/v2/%(project_id)s'
+        - type: volumev3
+          interface: public
+          url: 'http://controller:8776/v3/%(project_id)s'
+        - type: volumev3
+          interface: internal
+          url: 'http://controller:8776/v3/%(project_id)s'
+        - type: volumev3
+          interface: admin
+          url: 'http://controller:8776/v3/%(project_id)s'
+
+    - name: Install Cinder components
+      yum:
+        name:
+          - openstack-cinder
+        state: installed
+
+    - name: Remove Cinder auth token section
+      ini_file:
+        path: /etc/cinder/cinder.conf
+        section: '{{ item }}'
+        state: absent
+      with_items:
+        - keystone_authtoken
+
+    - name: Configure Cinder components
+      ini_file:
+        path: /etc/cinder/cinder.conf
+        section: '{{ item.section }}'
+        option: '{{ item.option }}'
+        value: '{{ item.value }}'
+      with_items:
+
+        - section: database
+          option: connection
+          value: mysql+pymysql://cinder:12345@controller/cinder
+
+        - section: DEFAULT
+          option: transport_url
+          value: rabbit://openstack:12345@controller
+        - section: DEFAULT
+          option: auth_strategy
+          value: keystone
+        - section: DEFAULT
+          option: my_ip
+          value: '{{ management_ip.stdout }}'
+
+        - section: keystone_authtoken
+          option: auth_uri
+          value: http://controller:5000
+        - section: keystone_authtoken
+          option: auth_url
+          value: http://controller:35357
+        - section: keystone_authtoken
+          option: memcached_servers
+          value: controller:11211
+        - section: keystone_authtoken
+          option: auth_type
+          value: password
+        - section: keystone_authtoken
+          option: project_domain_id
+          value: default
+        - section: keystone_authtoken
+          option: user_domain_id
+          value: default
+        - section: keystone_authtoken
+          option: project_name
+          value: service
+        - section: keystone_authtoken
+          option: username
+          value: cinder
+        - section: keystone_authtoken
+          option: password
+          value: 12345
+
+        - section: oslo_concurrency
+          option: lock_path
+          value: /var/lib/cinder/tmp
+
+    - name: Populate the Block Storage database
+      become_user: cinder
+      command:
+        cinder-manage db sync
+
+    - name: Restart the Compute API service
+      systemd:
+        name: '{{ item }}'
+        enabled: yes
+        state: restarted
+      with_items:
+        - openstack-nova-api
+        - openstack-cinder-api
+        - openstack-cinder-scheduler
 
 
 - hosts: compute1,compute2
@@ -1381,3 +1527,30 @@
         - libvirtd
         - openstack-nova-compute
         - neutron-linuxbridge-agent
+
+
+- hosts: block
+  become: true
+  tasks:
+
+    - name: Installl compute node components
+      yum:
+        name:
+          - lvm2
+        state: installed
+
+    - name: Start the LVM metadata service and configure it to start when the system boots
+      systemd:
+        name: '{{ item }}'
+        enabled: yes
+        state: restarted
+      with_items:
+        - lvm2-lvmetad
+
+    - name: Create the LVM physical volume /dev/sdb
+      command:
+        pvcreate /dev/sdb
+
+    - name: Create the LVM volume group cinder-volumes
+      command:
+        vgcreate cinder-volumes /dev/sdb
