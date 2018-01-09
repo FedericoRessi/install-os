@@ -1536,9 +1536,9 @@
 
     - name: Installl compute node components
       yum:
+        state: installed
         name:
           - lvm2
-        state: installed
 
     - name: Start the LVM metadata service and configure it to start when the system boots
       systemd:
@@ -1569,3 +1569,16 @@
       command:
         vgcreate cinder-volumes /dev/vdb
       when: has_lvm_volume_group.rc != 0
+
+    - name:
+      template:
+        src: etc/lvm/lvm_cinder.conf
+        dest: /etc/lvm/lvm_cinder.conf
+
+    - name: Install cinder components
+      yum:
+        state: installed
+        name:
+          - openstack-cinder
+          - targetcli
+          - python-keystone
