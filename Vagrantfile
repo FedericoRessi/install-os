@@ -42,7 +42,7 @@ Vagrant.configure("2") do |config|
 
   config.vm.define "block" do |block|
     # management network
-    block.vm.network "private_network", ip: "192.168.11.200"
+    block.vm.network "private_network", ip: "192.168.10.200"
 
     block.vm.provider :libvirt do |vm|
       # Add block device /dev/vdb

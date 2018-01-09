@@ -15,6 +15,16 @@
         dest: /etc/hosts
       tags: dns
 
+    - name: Get management IP from /etc/hosts file
+      shell: >
+        getent ahostsv4 '{{ inventory_hostname }}'  | awk '{print $1; exit 0}'
+      register: management_ip
+
+    - name: Write management_ip to file
+      template:
+        src: etc/management_ip.j2
+        dest: /etc/management_ip
+
     - name: Install NTP service
       yum:
         name: chrony
@@ -1156,22 +1166,22 @@
       with_items:
         - type: volumev2
           interface: public
-          url: 'http://controller:8776/v2/%(project_id)s'
+          url: 'http://control:8776/v2/%(project_id)s'
         - type: volumev2
           interface: internal
-          url: 'http://controller:8776/v2/%(project_id)s'
+          url: 'http://control:8776/v2/%(project_id)s'
         - type: volumev2
           interface: admin
-          url: 'http://controller:8776/v2/%(project_id)s'
+          url: 'http://control:8776/v2/%(project_id)s'
         - type: volumev3
           interface: public
-          url: 'http://controller:8776/v3/%(project_id)s'
+          url: 'http://control:8776/v3/%(project_id)s'
         - type: volumev3
           interface: internal
-          url: 'http://controller:8776/v3/%(project_id)s'
+          url: 'http://control:8776/v3/%(project_id)s'
         - type: volumev3
           interface: admin
-          url: 'http://controller:8776/v3/%(project_id)s'
+          url: 'http://control:8776/v3/%(project_id)s'
 
     - name: Install Cinder components
       yum:
@@ -1197,11 +1207,11 @@
 
         - section: database
           option: connection
-          value: mysql+pymysql://cinder:12345@controller/cinder
+          value: mysql+pymysql://cinder:12345@control/cinder
 
         - section: DEFAULT
           option: transport_url
-          value: rabbit://openstack:12345@controller
+          value: rabbit://openstack:12345@control
         - section: DEFAULT
           option: auth_strategy
           value: keystone
@@ -1211,13 +1221,13 @@
 
         - section: keystone_authtoken
           option: auth_uri
-          value: http://controller:5000
+          value: http://control:5000
         - section: keystone_authtoken
           option: auth_url
-          value: http://controller:35357
+          value: http://control:35357
         - section: keystone_authtoken
           option: memcached_servers
-          value: controller:11211
+          value: control:11211
         - section: keystone_authtoken
           option: auth_type
           value: password
@@ -1534,6 +1544,16 @@
   become: true
   tasks:
 
+    - name: Install ifconfig
+      yum:
+        name: net-tools
+        state: installed
+
+    - name: Get management interface IP
+      shell: >
+        ifconfig eth1 | awk '/\sinet\s/{print $2}'
+      register: management_ip
+
     - name: Installl compute node components
       yum:
         state: installed
@@ -1582,3 +1602,91 @@
           - openstack-cinder
           - targetcli
           - python-keystone
+
+    - name: Remove keystone_authtoken section
+      ini_file:
+        path: /etc/cinder/cinder.conf
+        section: keystone_authtoken
+        state: absent
+
+    - name: Configure cinder components
+      ini_file:
+        path: /etc/cinder/cinder.conf
+        section: '{{ item.section }}'
+        option: '{{ item.option }}'
+        value: '{{ item.value }}'
+      with_items:
+
+        - section: database
+          option: connection
+          value: 'mysql+pymysql://cinder:12345@control/cinder'
+
+        - section: DEFAULT
+          option: transport_url
+          value: 'rabbit://openstack:12345@control'
+        - section: DEFAULT
+          option: auth_strategy
+          value: keystone
+        - section: DEFAULT
+          option: my_ip
+          value: '{{ management_ip.stdout }}'
+        - section: DEFAULT
+          option: enabled_backends
+          value: lvm
+        - section: DEFAULT
+          option: glance_api_servers
+          value: 'http://control:9292'
+
+        - section: keystone_authtoken
+          option: auth_uri
+          value: 'http://control:5000'
+        - section: keystone_authtoken
+          option: auth_url
+          value: 'http://control:35357'
+        - section: keystone_authtoken
+          option: memcached_servers
+          value: 'control:11211'
+        - section: keystone_authtoken
+          option: auth_type
+          value: password
+        - section: keystone_authtoken
+          option: project_domain_id
+          value: default
+        - section: keystone_authtoken
+          option: user_domain_id
+          value: default
+        - section: keystone_authtoken
+          option: project_name
+          value: service
+        - section: keystone_authtoken
+          option: username
+          value: cinder
+        - section: keystone_authtoken
+          option: password
+          value: 12345
+
+        - section: lvm
+          option: volume_driver
+          value: cinder.volume.drivers.lvm.LVMVolumeDriver
+        - section: lvm
+          option: volume_group
+          value: cinder-volumes
+        - section: lvm
+          option: iscsi_protocol
+          value: iscsi
+        - section: lvm
+          option: iscsi_helper
+          value: lioadm
+
+        - section: oslo_concurrency
+          option: lock_path
+          value: /var/lib/cinder/tmp
+
+    - name: Enable and start cinder services
+      systemd:
+        name: '{{ item }}'
+        enabled: yes
+        state: restarted
+      with_items:
+        - openstack-cinder-volume
+        - target
