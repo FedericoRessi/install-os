@@ -43,17 +43,11 @@ Vagrant.configure("2") do |config|
   config.vm.define "block" do |block|
     # management network
     block.vm.network "private_network", ip: "192.168.11.200"
-    block_device_file = ".install-os/block-device"
-    unless File.exist?(block_device_file)
-      block.vm.customize [
-        'createhd', '--filename', block_device_file, '--size', 500 * 1024
-      ]
-    end
 
-    block.vm.customize [
-      'storageattach', :id, '--storagectl', 'SATA Controller', '--port', 1, '--device', 0,
-      '--type', 'hdd', '--medium', block_device_file
-    ]
+    block.vm.provider :libvirt do |vm|
+      # Add block device /dev/vdb
+      vm.storage :file
+    end
   end
 
   (1..2).each do |i|
