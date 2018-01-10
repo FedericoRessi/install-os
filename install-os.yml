@@ -1255,7 +1255,7 @@
       become_user: cinder
       command:
         cinder-manage db sync
-      ignore_errors: true
+      # ignore_errors: true
 
     - name: Restart the Compute API service
       systemd:
@@ -1568,18 +1568,23 @@
       with_items:
         - lvm2-lvmetad
 
-    - name: Check if LVM physical volume /dev/vdb exists
+    - name: Get free block device
+      shell: >
+        ls /dev/[vs]db | head -n 1
+      register: block_device
+
+    - name: Check if LVM physical volume {{ block_device.stdout }} exists
       command:
-        pvdisplay /dev/vdb
+        pvdisplay {{ block_device.stdout }}
       ignore_errors: true
       register: has_lvm_physical_volume
 
-    - name: Create the LVM physical volume /dev/vdb
+    - name: Create the LVM physical volume {{ block_device.stdout }}
       command:
-        pvcreate /dev/vdb
+        pvcreate {{ block_device.stdout }}
       when: has_lvm_physical_volume.rc != 0
 
-    - name: Check if LVM volume group /dev/vdb exists
+    - name: Check if LVM volume group {{ block_device.stdout }} exists
       command:
         vgdisplay cinder-volumes
       ignore_errors: true
@@ -1587,7 +1592,7 @@
 
     - name: Create the LVM volume group cinder-volumes
       command:
-        vgcreate cinder-volumes /dev/vdb
+        vgcreate cinder-volumes {{ block_device.stdout }}
       when: has_lvm_volume_group.rc != 0
 
     - name:

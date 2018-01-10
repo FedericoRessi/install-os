@@ -32,21 +32,28 @@ Vagrant.configure("2") do |config|
     control.vm.provider "libvirt" do |vm|
       vm.memory = 8192
     end
-    config.vm.provider "virtualbox" do |vm|
+    control.vm.provider "virtualbox" do |vm|
       vm.memory = 8192
     end
 
     # Open httpd port to host machine for accessing to access to dashboard
-    config.vm.network "forwarded_port", guest: 80, host: 8080
+    control.vm.network "forwarded_port", guest: 80, host: 8080
   end
 
   config.vm.define "block" do |block|
     # management network
     block.vm.network "private_network", ip: "192.168.10.200"
 
-    block.vm.provider :libvirt do |vm|
+    block.vm.provider "libvirt" do |vm|
       # Add block device /dev/vdb
       vm.storage :file
+    end
+    block.vm.provider "virtualbox" do |vm|
+      # Add block device /dev/sdb
+      block.persistent_storage.enabled = true
+      block.persistent_storage.location = "./.install-os/block-volume.vdi"
+      block.persistent_storage.size = 5000
+      block.persistent_storage.partition = false
     end
   end
 
