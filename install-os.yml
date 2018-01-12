@@ -1385,12 +1385,30 @@
         source /home/vagrant/demo-openrc;
         openstack keypair create --public-key /home/vagrant/mykey.pub mykey
 
+    - name: Check default security group permits ICMP
+      shell: >
+        source /home/vagrant/demo-openrc;
+        openstack security group show default -f value -c rules | grep " protocol='icmp'"
+      ignore_errors: true
+      register: security_group_permits_icmp
+
     - name: Add rules to the default security group - Permit ICMP
+      when: security_group_permits_icmp.rc != 0
       shell: >
         source /home/vagrant/demo-openrc;
         openstack security group rule create --proto icmp default
 
+    - name: Check default security group permits SSH access
+      shell: >
+        source /home/vagrant/demo-openrc;
+        openstack security group show default -f value -c rules |
+          grep -e "protocol='tcp'" -e "port_range_max='22'" -e "port_range_min='22'" -o |
+          awk '{print $0} END{ if (NR != 3) exit(1) }'
+      ignore_errors: true
+      register: security_group_permits_ssh
+
     - name: Add rules to the default security group - Permit secure shell (SSH) access
+      when: security_group_permits_ssh.rc != 0
       shell: >
         source /home/vagrant/demo-openrc;
         openstack security group rule create --proto tcp --dst-port 22 default
