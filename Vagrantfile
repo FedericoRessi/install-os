@@ -49,11 +49,13 @@ Vagrant.configure("2") do |config|
       vm.storage :file
     end
     block.vm.provider "virtualbox" do |vm|
-      # Add block device /dev/sdb
-      block.persistent_storage.enabled = true
-      block.persistent_storage.location = "./.install-os/block-volume.vdi"
-      block.persistent_storage.size = 5000
-      block.persistent_storage.partition = false
+      if Vagrant.has_plugin?("vagrant-persistent-storage")
+        # Add block device /dev/sdb
+        block.persistent_storage.enabled = true
+        block.persistent_storage.location = "./.install-os/block-volume.vdi"
+        block.persistent_storage.size = 5000
+        block.persistent_storage.partition = false
+      end
     end
   end
 
