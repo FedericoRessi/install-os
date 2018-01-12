@@ -1255,7 +1255,6 @@
       become_user: cinder
       command:
         cinder-manage db sync
-      # ignore_errors: true
 
     - name: Restart the Compute API service
       systemd:
@@ -1357,7 +1356,7 @@
 
     - name: Check there m1.nano flavor exists
       shell: >
-        openstack flavor list | grep m1.nano
+        openstack flavor show m1.nano
       ignore_errors: true
       register: m1_nano_flavor_exists
 
@@ -1386,6 +1385,13 @@
         source /home/vagrant/demo-openrc;
         openstack keypair create --public-key /home/vagrant/mykey.pub mykey
 
+    - name: Add rules to the default security group - Permit ICMP
+      shell: >
+        openstack security group rule create --proto icmp default
+
+    - name: Add rules to the default security group - Permit secure shell (SSH) access
+      shell: >
+        openstack security group rule create --proto tcp --dst-port 22 default
 
 - hosts: compute1,compute2
   become: true
