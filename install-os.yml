@@ -1267,6 +1267,125 @@
         - openstack-cinder-api
         - openstack-cinder-scheduler
 
+    - name: Check provider network exists
+      shell: >
+        openstack network show provider
+      ignore_errors: true
+      register: provider_network_exists
+
+    - name: Create provider network
+      when: provider_network_exists.rc != 0
+      command: >
+        openstack network create \
+          --share --external \
+          --provider-physical-network provider \
+          --provider-network-type flat provider
+
+    - name: Check provider subnet exists
+      shell: >
+        openstack subnet show provider
+      ignore_errors: true
+      register: provider_subnet_exists
+
+    - name: Create a subnet on the provider network
+      when: provider_subnet_exists.rc != 0
+      command: >
+        openstack subnet create \
+          --network provider \
+          --allocation-pool start=203.0.113.101,end=203.0.113.250 \
+          --dns-nameserver 8.8.8.8 --gateway 203.0.113.1 \
+          --subnet-range 203.0.113.0/24 provider
+
+    - name: Check self-service network exists
+      shell: >
+        source /home/vagrant/demo-openrc;
+        openstack network show selfservice
+      ignore_errors: true
+      register: selfservice_network_exists
+
+    - name: Create the self-service network
+      when: selfservice_network_exists.rc != 0
+      shell: >
+        source /home/vagrant/demo-openrc;
+        openstack network create selfservice
+
+    - name: Check self-service subnet exists
+      shell: >
+        source /home/vagrant/demo-openrc;
+        openstack subnet show selfservice
+      ignore_errors: true
+      register: selfservice_subnet_exists
+
+    - name: Create subnet on self-service network
+      when: selfservice_subnet_exists.rc != 0
+      shell: >
+        source /home/vagrant/demo-openrc;
+        openstack subnet create --network selfservice \
+          --dns-nameserver 8.8.8.8 --gateway 172.16.1.1 \
+          --subnet-range 172.16.1.0/24 selfservice
+
+    - name: Check if router exists
+      shell: >
+        source /home/vagrant/demo-openrc;
+        openstack router show router
+      ignore_errors: true
+      register: router_exists
+
+    - name: Create a router
+      when: router_exists.rc != 0
+      shell: >
+        source /home/vagrant/demo-openrc;
+        openstack router create router
+
+    - name: Add the self-service network subnet as an interface on the router
+      shell: >
+        source /home/vagrant/demo-openrc;
+        openstack router add subnet router selfservice
+      ignore_errors: true
+      register: router_subnet_added
+
+    - name: Check selfservice subnet was already been added to router
+      when: router_subnet_added.rc != 0
+      shell: >
+        echo "{{ router_subnet_added.stderr }}" |
+          grep -e '^HttpException: Bad Request, Bad router request: Router already has a port on subnet '
+
+    - name: Set a gateway on the provider network on the router
+      shell: >
+        source /home/vagrant/demo-openrc;
+        openstack router set --external-gateway provider router
+
+    - name: Check there m1.nano flavor exists
+      shell: >
+        openstack flavor list | grep m1.nano
+      ignore_errors: true
+      register: m1_nano_flavor_exists
+
+    - name: Create m1.name flavor
+      when: m1_nano_flavor_exists.rc != 0
+      command: >
+        openstack flavor create --id 0 --vcpus 1 --ram 64 --disk 1 m1.nano
+
+    - name: Check keypair exists
+      shell: >
+        source /home/vagrant/demo-openrc;
+        openstack keypair show mykey
+      ignore_errors: true
+      register: keypair_exists
+
+    - name: Generate a key pair
+      when: keypair_exists.rc != 0
+      command: >
+        ssh-keygen -q -N "" -f /home/vagrant/mykey
+      args:
+        creates: /home/vagrant/mykey
+
+    - name: Add keypair
+      when: keypair_exists.rc != 0
+      shell: >
+        source /home/vagrant/demo-openrc;
+        openstack keypair create --public-key /home/vagrant/mykey.pub mykey
+
 
 - hosts: compute1,compute2
   become: true
