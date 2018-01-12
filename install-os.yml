@@ -1841,3 +1841,58 @@
       with_items:
         - openstack-cinder-volume
         - target
+
+
+- hosts: control
+  become: true
+  environment:
+    OS_USERNAME: demo
+    OS_PASSWORD: demo
+    OS_PROJECT_NAME: demo
+    OS_USER_DOMAIN_ID: default
+    OS_PROJECT_DOMAIN_ID: default
+    OS_AUTH_URL: 'http://control:5000/v3'
+    OS_IDENTITY_API_VERSION: 3
+    OS_IMAGE_API_VERSION: 2
+  tasks:
+
+#    - name: Get m1.nano flavor id
+#      command: >
+#        openstack flavor show m1.nano -f value -c id
+#      register:
+#        flavor_id
+#
+#    - name: Get cirros image id
+#      command: >
+#        openstack image show cirros -f value -c id
+#      register:
+#        image_id
+
+    - name: Get selfservice network id
+      command: >
+        openstack network show selfservice -c id -f value
+      register:
+        network_id
+
+#    - name: Get security group ID
+#      command: >
+#        openstack security group show default -c id -f value
+#      register:
+#        security_group_id
+
+    - name: Get instance ID
+      command: >
+        openstack server show selfservice-instance -c id -f value
+      register: instance_id
+      ignore_errors: true
+
+    - name: Launch an instance
+      when: instance_id|failed
+      command: >
+        openstack server create \
+          --flavor m1.nano \
+          --image cirros \
+          --nic net-id={{ network_id.stdout }} \
+          --security-group default \
+          --key-name mykey
+        selfservice-instance
