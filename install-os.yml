@@ -1387,11 +1387,14 @@
 
     - name: Add rules to the default security group - Permit ICMP
       shell: >
+        source /home/vagrant/demo-openrc;
         openstack security group rule create --proto icmp default
 
     - name: Add rules to the default security group - Permit secure shell (SSH) access
       shell: >
+        source /home/vagrant/demo-openrc;
         openstack security group rule create --proto tcp --dst-port 22 default
+
 
 - hosts: compute1,compute2
   become: true
