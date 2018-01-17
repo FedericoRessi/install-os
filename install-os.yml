@@ -1631,6 +1631,11 @@
         - openstack-heat-api-cfn
         - openstack-heat-engine
 
+    - name: Verify orchestration service
+      shell: >
+        openstack orchestration service list -f value -c Hostname |
+        grep "^control$"
+
 
 - hosts: compute1,compute2
   become: true
@@ -2059,40 +2064,3 @@
       with_items:
         - openstack-cinder-volume
         - target
-
-
-#- hosts: control
-#  become: true
-#  environment:
-#    OS_USERNAME: demo
-#    OS_PASSWORD: demo
-#    OS_PROJECT_NAME: demo
-#    OS_USER_DOMAIN_ID: default
-#    OS_PROJECT_DOMAIN_ID: default
-#    OS_AUTH_URL: 'http://control:5000/v3'
-#    OS_IDENTITY_API_VERSION: 3
-#    OS_IMAGE_API_VERSION: 2
-#  tasks:
-#
-#    - name: Get selfservice network id
-#      command: >
-#        openstack network show selfservice -c id -f value
-#      register:
-#        network_id
-#
-#    - name: Get instance ID
-#      command: >
-#        openstack server show selfservice-instance -c id -f value
-#      register: instance_id
-#      ignore_errors: true
-#
-#    - name: Launch an instance
-#      when: instance_id|failed
-#      command: >
-#        openstack server create
-#          --flavor m1.nano
-#          --image cirros
-#          --nic net-id={{ network_id.stdout }}
-#          --security-group default
-#          --key-name mykey
-#          selfservice-instance
