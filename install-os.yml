@@ -1636,6 +1636,17 @@
         openstack orchestration service list -f value -c Hostname |
         grep "^control$"
 
+    - name: Get provider network ID
+      shell:
+        openstack network list -f value -c Name -c ID | awk '($2 == "provider"){print $1}'
+      register:
+        provider_network_id
+
+    - name: Provide Heat demo template
+      template:
+        src: 'demo-template.yml.j2'
+        dest: '/home/vagrant/demo-template.yml'
+
 
 - hosts: compute1,compute2
   become: true
