@@ -1468,23 +1468,23 @@
 
         - type: orchestration
           interface: public
-          url: 'http://controller:8004/v1/%(tenant_id)s'
+          url: 'http://control:8004/v1/%(tenant_id)s'
         - type: orchestration
           interface: internal
-          url: 'http://controller:8004/v1/%(tenant_id)s'
+          url: 'http://control:8004/v1/%(tenant_id)s'
         - type: orchestration
           interface: admin
-          url: 'http://controller:8004/v1/%(tenant_id)ss'
+          url: 'http://control:8004/v1/%(tenant_id)ss'
 
         - type: cloudformation
           interface: public
-          url: 'http://controller:8000/v1'
+          url: 'http://control:8000/v1'
         - type: cloudformation
           interface: internal
-          url: 'http://controller:8000/v1'
+          url: 'http://control:8000/v1'
         - type: cloudformation
           interface: admin
-          url: 'http://controller:8000/v1'
+          url: 'http://control:8000/v1'
 
     - name: Check heat users domain exists
       command: >
@@ -1501,15 +1501,135 @@
       command: >
         openstack user show heat_domain_admin
       ignore_errors: true
-      register: heat_users_domain_exists
+      register: heat_domain_admin_exists
 
     - name: Create the heat_domain_admin user to manage projects and users in the heat domain
-      command: >
+      when: heat_domain_admin_exists|failed
+      shell: >
         openstack user create --domain heat --password 12345 heat_domain_admin
 
     - name: Add the admin role to the heat_domain_admin user in the heat domain
       command: >
         openstack role add --domain heat --user-domain heat --user heat_domain_admin admin
+
+    - name: Create the heat_stack_owner and heat_stack_user role
+      shell: >
+        openstack role show '{{ item }}' ||
+        openstack role create '{{ item }}'
+      with_items:
+        - heat_stack_owner
+        - heat_stack_user
+
+    - name: Add the heat_stack_owner role to the demo project and user
+      command:
+        openstack role add --project demo --user demo heat_stack_owner
+
+    - name: Install the Heat packages
+      yum:
+        name:
+          - openstack-heat-api
+          - openstack-heat-api-cfn
+          - openstack-heat-engine
+        state: installed
+
+    - name: Configure Heat components
+      ini_file:
+        path: /etc/heat/heat.conf
+        section: '{{ item.section }}'
+        option: '{{ item.option }}'
+        value: '{{ item.value }}'
+
+      with_items:
+
+        - section: database
+          option: connection
+          value: 'mysql+pymysql://heat:12345@control/heat'
+
+        - section: DEFAULT
+          option: transport_url
+          value: 'rabbit://openstack:12345@control'
+        - section: DEFAULT
+          option: heat_metadata_server_url
+          value: http://control:8000
+        - section: DEFAULT
+          option: heat_waitcondition_server_url
+          value: http://control:8000/v1/waitcondition
+        - section: DEFAULT
+          option: stack_domain_admin
+          value: heat_domain_admin
+        - section: DEFAULT
+          option: stack_domain_admin_password
+          value: 12345
+        - section: DEFAULT
+          option: stack_user_domain_name
+          value: heat
+
+        - section: keystone_authtoken
+          option: auth_uri
+          value: http://control:5000
+        - section: keystone_authtoken
+          option: auth_url
+          value: http://control:35357
+        - section: keystone_authtoken
+          option: memcached_servers
+          value: control:11211
+        - section: keystone_authtoken
+          option: auth_type
+          value: password
+        - section: keystone_authtoken
+          option: project_domain_id
+          value: default
+        - section: keystone_authtoken
+          option: user_domain_id
+          value: default
+        - section: keystone_authtoken
+          option: project_name
+          value: service
+        - section: keystone_authtoken
+          option: username
+          value: heat
+        - section: keystone_authtoken
+          option: password
+          value: 12345
+
+        - section: trustee
+          option: auth_type
+          value: password
+        - section: trustee
+          option: auth_url
+          value: http://control:35357
+        - section: trustee
+          option: username
+          value: heat
+        - section: trustee
+          option: password
+          value: 12345
+        - section: trustee
+          option: user_domain_name
+          value: default
+
+        - section: clients_keystone
+          option: auth_uri
+          value: http://control:35357
+
+        - section: ec2authtoken
+          option: auth_uri
+          value: http://control:5000/v3
+
+    - name: Populate the Orchestration database
+      become_user: heat
+      command:
+        heat-manage db_sync
+
+    - name: Start the Orchestration services and configure them to start when the system boots
+      systemd:
+        name: '{{ item }}'
+        enabled: yes
+        state: restarted
+      with_items:
+        - openstack-heat-api
+        - openstack-heat-api-cfn
+        - openstack-heat-engine
 
 
 - hosts: compute1,compute2
