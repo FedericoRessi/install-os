@@ -8,35 +8,6 @@
 
   tasks:
 
-    - name: Create libvirt group
-      group:
-        name: libvirt
-        state: present
-
-    - name: Create {{ user }} user
-      user:
-        name: "{{ user }}"
-        groups: "libvirt"
-
-    - name: Create ~/.ssh directory
-      file:
-        path: "{{ home }}/.ssh"
-        mode: 0700
-        state: directory
-        owner: "{{ user }}"
-
-    - name: Create ~/.ssh/authorized_keys file
-      file:
-        path: "{{ home }}/.ssh/authorized_keys"
-        mode: 0600
-        state: touch
-        owner: "{{ user }}"
-
-    - name: Add SSH key to {{ user }} user
-      lineinfile: 
-        path: "{{ home }}/.ssh/authorized_keys"
-        line: "{{ lookup('env','TARGET_PUB_KEY') }}"
-
     - name: Install packages to use libvirt
       yum:
         name: "{{ item }}"
@@ -58,20 +29,6 @@
       yum:
         name: rsync
         state: present
-
-    - name: Get vagrant RPM
-      get_url:
-        url: "https://releases.hashicorp.com/vagrant/2.0.1/vagrant_2.0.1_x86_64.rpm"
-        dest: /tmp/vagrant_2.0.1_x86_64.rpm
-
-    - name: Install vagrant
-      yum:
-        name: /tmp/vagrant_2.0.1_x86_64.rpm
-        state: present
-
-    - name: Install livirt vagrant plugin
-      command:
-        vagrant plugin install vagrant-libvirt
 
     - name: Check to see if pip is already installed
       command: "pip --version"
@@ -99,3 +56,43 @@
     - name: Install ansible
       pip:
         name: ansible
+
+    - name: Get vagrant RPM
+      get_url:
+        url: "https://releases.hashicorp.com/vagrant/2.0.1/vagrant_2.0.1_x86_64.rpm"
+        dest: /tmp/vagrant_2.0.1_x86_64.rpm
+
+    - name: Install vagrant
+      yum:
+        name: /tmp/vagrant_2.0.1_x86_64.rpm
+        state: present
+
+    - name: Create {{ user }} user
+      user:
+        name: "{{ user }}"
+        groups: "libvirt"
+
+    - name: Create ~/.ssh directory
+      file:
+        path: "{{ home }}/.ssh"
+        mode: 0700
+        state: directory
+        owner: "{{ user }}"
+
+    - name: Create ~/.ssh/authorized_keys file
+      file:
+        path: "{{ home }}/.ssh/authorized_keys"
+        mode: 0600
+        state: touch
+        owner: "{{ user }}"
+
+    - name: Add SSH key to {{ user }} user
+      lineinfile:
+        path: "{{ home }}/.ssh/authorized_keys"
+        line: "{{ lookup('env','TARGET_PUB_KEY') }}"
+
+    - name: Install livirt vagrant plugin
+      become_user: stack
+      command:
+        vagrant plugin install vagrant-libvirt
+

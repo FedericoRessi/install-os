@@ -2,6 +2,9 @@
 
 Vagrant.configure("2") do |config|
 
+  config.vm.box = "centos/7"
+  config.vm.box_version = "1710.01"
+
   # We don't need synced folders because we fully rely on ansible for provisioning.
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
@@ -21,8 +24,6 @@ Vagrant.configure("2") do |config|
     vm.cpus = 1
     vm.memory = 4096
   end
-
-  config.vm.box = "centos/7"
 
   config.vm.define "control" do |control|
     # management network
