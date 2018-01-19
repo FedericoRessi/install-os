@@ -1,20 +1,24 @@
 ---
 - hosts: target
-  
+  become: true
+
   vars:
     user: stack
     home: "/home/{{ user }}"
 
   tasks:
 
+    - name: Create libvirt group
+      group:
+        name: libvirt
+        state: present
+
     - name: Create {{ user }} user
-      become: true
       user:
         name: "{{ user }}"
         groups: "libvirt"
 
     - name: Create ~/.ssh directory
-      become: true
       file:
         path: "{{ home }}/.ssh"
         mode: 0700
@@ -22,7 +26,6 @@
         owner: "{{ user }}"
 
     - name: Create ~/.ssh/authorized_keys file
-      become: true
       file:
         path: "{{ home }}/.ssh/authorized_keys"
         mode: 0600
@@ -30,13 +33,11 @@
         owner: "{{ user }}"
 
     - name: Add SSH key to {{ user }} user
-      become: true
       lineinfile: 
         path: "{{ home }}/.ssh/authorized_keys"
         line: "{{ lookup('env','TARGET_PUB_KEY') }}"
 
     - name: Install packages to use libvirt
-      become: true
       yum:
         name: "{{ item }}"
         state: present
@@ -54,7 +55,6 @@
         state: started
 
     - name: Install rsync tool
-      become: true
       yum:
         name: rsync
         state: present
@@ -63,15 +63,13 @@
       get_url:
         url: "https://releases.hashicorp.com/vagrant/2.0.1/vagrant_2.0.1_x86_64.rpm"
         dest: /tmp/vagrant_2.0.1_x86_64.rpm
-   
+
     - name: Install vagrant
-      become: true
       yum:
         name: /tmp/vagrant_2.0.1_x86_64.rpm
         state: present
 
     - name: Install livirt vagrant plugin
-      become: true
       command:
         vagrant plugin install vagrant-libvirt
 
@@ -84,7 +82,7 @@
     - name: Set up PIP
       when: pip_is_installed.rc != 0
       block:
-      
+
         - name: download get-pip.py
           get_url:
             url: https://bootstrap.pypa.io/get-pip.py
