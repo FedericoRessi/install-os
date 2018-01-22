@@ -9,11 +9,11 @@ Vagrant.configure("2") do |config|
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
   config.vm.provider "libvirt" do |vm|
-    if File.file?('.install-os/host')
-      vm.host = File.read('.install-os/host').gsub(/\s+/, "")
-      vm.username = "stack"
-      vm.connect_via_ssh = true
-    end
+#     if File.file?('.install-os/host')
+#       vm.host = File.read('.install-os/host').gsub(/\s+/, "")
+#       vm.username = "stack"
+#       vm.connect_via_ssh = true
+#     end
     vm.cpus = 1
     vm.nested = true
     vm.memory = 4096
@@ -28,17 +28,15 @@ Vagrant.configure("2") do |config|
   config.vm.define "control" do |control|
     # management network
     control.vm.network "private_network", ip: "192.168.10.100"
-    # provider network
-    control.vm.network "public_network"
+    # Open httpd port to host machine for accessing to access to dashboard
+    control.vm.network "forwarded_port", guest: 80, host: 8080
+
     control.vm.provider "libvirt" do |vm|
       vm.memory = 8192
     end
     control.vm.provider "virtualbox" do |vm|
       vm.memory = 8192
     end
-
-    # Open httpd port to host machine for accessing to access to dashboard
-    control.vm.network "forwarded_port", guest: 80, host: 8080
   end
 
   config.vm.define "block" do |block|
@@ -65,8 +63,6 @@ Vagrant.configure("2") do |config|
 
       # management network
       compute.vm.network "private_network", ip: "192.168.10.10#{i}"
-      # provider network
-      compute.vm.network "public_network"
 
       compute.vm.provider "libvirt" do |vm|
         vm.cpus = 1

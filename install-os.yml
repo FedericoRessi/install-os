@@ -935,7 +935,7 @@
 
         - section: linux_bridge
           option: physical_interface_mappings
-          value: provider:eth2
+          value: provider:eth0
 
         - section: securitygroup
           option: enable_security_group
@@ -1890,7 +1890,7 @@
 
         - section: linux_bridge
           option: physical_interface_mappings
-          value: provider:eth2
+          value: provider:eth0
 
         - section: securitygroup
           option: enable_security_group

@@ -24,6 +24,13 @@ rsync -ua \
   --exclude '.*' \
   --delete \
   "${SOURCE_FILES[@]}" \
-  "target:${TARGET_DIR}" 
+  "stack@target:${TARGET_DIR}"
 
-ssh -t -F "${TARGET_CONFIG_FILE}" target "cd '${TARGET_DIR}' && vagrant $@"
+
+REMOTE_COMMANDS="
+cd '${TARGET_DIR}' &&
+vagrant $@
+"
+
+
+ssh -t -F "${TARGET_CONFIG_FILE}" stack@target "${REMOTE_COMMANDS}"
