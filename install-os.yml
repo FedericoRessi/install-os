@@ -1291,14 +1291,24 @@
       ignore_errors: true
       register: provider_subnet_exists
 
+    - name: Get provider IP subnet
+      when: provider_subnet_exists|failed
+      shell: >
+        ip address show eth0 |
+        awk '($1 == "inet"){split($4,ip,"."); print ip[1] "." ip[2] "." ip[3]}'
+      register: provider_subnet_ip
+
     - name: Create a subnet on the provider network
-      when: provider_subnet_exists.rc != 0
+      when: provider_subnet_exists|failed
       command: >
         openstack subnet create \
           --network provider \
-          --allocation-pool start=203.0.113.101,end=203.0.113.250 \
-          --dns-nameserver 8.8.8.8 --gateway 203.0.113.1 \
-          --subnet-range 203.0.113.0/24 provider
+          --allocation-pool \
+          'start={{ provider_subnet_ip.stdout }}.192,end={{ provider_subnet_ip.stdout }}.250' \
+          --dns-nameserver 8.8.8.8 \
+          --gateway '{{ provider_subnet_ip.stdout }}.1' \
+          --subnet-range '{{ provider_subnet_ip.stdout }}.0/24' \
+          provider
 
     - name: Check self-service network exists
       shell: >
